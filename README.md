@@ -26,7 +26,7 @@ file for RSA-155.  Typical parameters are e.g.
 
 Since I only got this to compile about half an hour ago, all I have managed to get it to
 do is show the divisibility actually does work (e.g. try getting the resultant of the
-A*x + B with the RSA-155 polynomial, it will be divisible by primes in the factor base0),
+A*x + B with the RSA-155 polynomial, it will be divisible by primes in the factor base),
 but no relations for RSA-155 as of yet.
 
 Of course this might change if the program parameters can be optimized.
