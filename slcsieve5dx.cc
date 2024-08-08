@@ -50,11 +50,12 @@ bool int128_compare(const int128_t &v1, const int128_t &v2)
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
 void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
-	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m, int mbb);
-int64_t rel2A(int d, mpz_t* Ai, int64_t reli);
-int64_t rel2B(int d, mpz_t* Bi, int64_t reli);
+	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
+	 int mbb, int bb);
+int64_t rel2A(int d, mpz_t* Ai, int64_t reli, int bb);
+int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb);
 int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, int* mm, uint8_t logp,
-	int R, int nnmax);
+	int R, int nnmax, int bb);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
 inline __int128 gcd128(__int128 a, __int128 b);
@@ -263,10 +264,14 @@ int main(int argc, char** argv)
 
 	int R = Rmin;
 	int d = numlc + 1; int n = numlc;
+	int bb = 12;
 	int mm;
 	int64_t nn = 0;
 	while (nn < N) {
 		nn++;
+
+		// clear M
+		memset(M, 0, sizeof(M));
 	
 		// generate numlc random elements A*x + B
 		for (int i = 0; i < numlc; i++) {
@@ -281,7 +286,7 @@ int main(int argc, char** argv)
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
 		slcsieve(numlc, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
-			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb);
+			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, 12);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		int total = 0;
@@ -310,8 +315,8 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th0) {
-						int64_t A64 = rel2A(d, Ai, id);
-						int64_t B64 = rel2B(d, Bi, id);
+						int64_t A64 = rel2A(d, Ai, id, bb);
+						int64_t B64 = rel2B(d, Bi, id, bb);
 						if (R0 < 10) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(lastid);
 						R0++;
@@ -320,8 +325,8 @@ int main(int argc, char** argv)
 					sumlogp = Mii.logp;
 				}
 				if (ii == mend-1 && sumlogp > th0) {
-					int64_t A64 = rel2A(d, Ai, id);
-					int64_t B64 = rel2B(d, Bi, id);
+					int64_t A64 = rel2A(d, Ai, id, bb);
+					int64_t B64 = rel2B(d, Bi, id, bb);
 					if (R0 < 10) cout << A64 << "*x + " << B64 << endl;
 					rel.push_back(id);
 					R0++;
@@ -336,7 +341,7 @@ int main(int argc, char** argv)
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
 		slcsieve(numlc, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
-			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb);
+			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		cout << "# Size of lattice point list is " << mm << "." << endl;
@@ -358,8 +363,8 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th0) {
-						int64_t A64 = rel2A(d, Ai, id);
-						int64_t B64 = rel2B(d, Bi, id);
+						int64_t A64 = rel2A(d, Ai, id, bb);
+						int64_t B64 = rel2B(d, Bi, id, bb);
 						if (R1 < 10) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(lastid);
 						R1++;
@@ -368,8 +373,8 @@ int main(int argc, char** argv)
 					sumlogp = Mii.logp;
 				}
 				if (ii == mend-1 && sumlogp > th0) {
-					int64_t A64 = rel2A(d, Ai, id);
-					int64_t B64 = rel2B(d, Bi, id);
+					int64_t A64 = rel2A(d, Ai, id, bb);
+					int64_t B64 = rel2B(d, Bi, id, bb);
 					if (R1 < 10) cout << A64 << "*x + " << B64 << endl;
 					rel.push_back(id);
 					R1++;
@@ -391,8 +396,8 @@ int main(int argc, char** argv)
 		for (int i = 0; i < rel.size()-1; i++)
 		{
 			if (rel[i] == rel[i+1] && rel[i] != 0) {
-				int64_t A64 = rel2A(d, Ai, rel[i]);
-				int64_t B64 = rel2B(d, Bi, rel[i]);
+				int64_t A64 = rel2A(d, Ai, rel[i], bb);
+				int64_t B64 = rel2B(d, Bi, rel[i], bb);
 				if (A64 != 0 && B64 != 0) {
 					R++;
 				}
@@ -409,8 +414,8 @@ int main(int argc, char** argv)
 		for (int i = 0; i < (int)(rel.size()-1); i++)
 		{
 			// construct A*x + B from small linear combinations
-			int64_t A64 = rel2A(d, Ai, rel[i]);
-			int64_t B64 = rel2B(d, Bi, rel[i]);
+			int64_t A64 = rel2A(d, Ai, rel[i], bb);
+			int64_t B64 = rel2B(d, Bi, rel[i], bb);
 			mpz_set_si(A, A64); mpz_set_si(B, B64);
 
 			// remove content of A*x + B
@@ -663,31 +668,35 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-int64_t rel2A(int d, mpz_t* Ai, int64_t reli)
+int64_t rel2A(int d, mpz_t* Ai, int64_t reli, int bb)
 {
+	int64_t BB = 1<<bb;
+	int64_t hB = 1<<(bb-1);
 	mpz_t t; mpz_init_set_ui(t, 0);
 	int64_t A = 0;
 	for (int j = 0; j < d-2; j++) {
-		int a = (reli >> (8*j)) % 0xFF;
+		int a = (reli >> (bb*j)) % BB - hB;
 		mpz_mul_si(t, Ai[j], a);
 		A += mpz_get_si(t);
 	}
-	int a = (reli >> (8*d)) % 0xFF;
+	int a = (reli >> (bb*(d-1))) % BB - hB;
 	A += a;
 	mpz_clear(t);
 	return A;
 }
 
-int64_t rel2B(int d, mpz_t* Bi, int64_t reli)
+int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb)
 {
+	int64_t BB = 1<<bb;
+	int64_t hB = 1<<(bb-1);
 	mpz_t t; mpz_init_set_ui(t, 0);
 	int64_t B = 0;
 	for (int j = 0; j < d-2; j++) {
-		int b = (reli >> (8*j)) % 0xFF;
+		int b = (reli >> (bb*j)) % BB - hB;
 		mpz_mul_si(t, Bi[j], b);
 		B += mpz_get_si(t);
 	}
-	int b = (reli >> (8*(d-1))) % 0xFF;
+	int b = (reli >> (bb*(d-2))) % BB - hB;
 	B += b;
 	mpz_clear(t);
 	return B;
@@ -708,7 +717,8 @@ inline int max(int u, int v)
 
 
 void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
-	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m, int mbb)
+	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
+	int mbb, int bb)
 {
 	int d = numlc + 1; int n = numlc;
 	int dn = d*n;
@@ -750,7 +760,7 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 			int64L2(L, d, n);
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
-			int nn = enumerate5d(d, n, L, M, m, mm, logp, R, 1000);
+			int nn = enumerate5d(d, n, L, M, m, mm, logp, R, 1000, bb);
 			to_string(nn);
 		}
 		
@@ -779,9 +789,8 @@ void printvectors(int d, vector<uint64_t> &M, int n, int hB)
 }
 
 int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, int* mm, uint8_t logp,
-	int R, int nnmax)
+	int R, int nnmax, int bb)
 {
-	int bb = 12;
 	int64_t hB = 1<<(bb-1);
 	int bb2 = bb*2;
 	int bb3 = bb*3;
