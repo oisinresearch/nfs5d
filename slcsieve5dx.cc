@@ -54,7 +54,7 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 	 int mbb, int bb);
 int64_t rel2A(int d, mpz_t* Ai, int64_t reli, int bb);
 int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb);
-int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, int* mm, uint8_t logp,
+int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp,
 	int R, int nnmax, int bb);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
@@ -315,11 +315,13 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th0) {
-						int64_t A64 = rel2A(d, Ai, id, bb);
-						int64_t B64 = rel2B(d, Bi, id, bb);
-						if (R0 < 10) cout << A64 << "*x + " << B64 << endl;
-						rel.push_back(lastid);
-						R0++;
+						int64_t A64 = rel2A(d, Ai, lastid, bb);
+						int64_t B64 = rel2B(d, Bi, lastid, bb);
+						if (A64 != 0 && B64 != 0) {
+							if (R0 < 10) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							rel.push_back(lastid);
+							R0++;
+						}
 					}
 					lastid = id;
 					sumlogp = Mii.logp;
@@ -327,9 +329,11 @@ int main(int argc, char** argv)
 				if (ii == mend-1 && sumlogp > th0) {
 					int64_t A64 = rel2A(d, Ai, id, bb);
 					int64_t B64 = rel2B(d, Bi, id, bb);
-					if (R0 < 10) cout << A64 << "*x + " << B64 << endl;
-					rel.push_back(id);
-					R0++;
+					if (A64 != 0 && B64 != 0) {
+						if (R0 < 10) cout << A64 << "*x + " << B64 << endl;
+						rel.push_back(id);
+						R0++;
+					}
 				}
 			}
 		}
@@ -363,11 +367,13 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th0) {
-						int64_t A64 = rel2A(d, Ai, id, bb);
-						int64_t B64 = rel2B(d, Bi, id, bb);
-						if (R1 < 10) cout << A64 << "*x + " << B64 << endl;
-						rel.push_back(lastid);
-						R1++;
+						int64_t A64 = rel2A(d, Ai, lastid, bb);
+						int64_t B64 = rel2B(d, Bi, lastid, bb);
+						if (A64 != 0 && B64 != 0) {
+							if (R1 < 10) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							rel.push_back(lastid);
+							R1++;
+						}
 					}
 					lastid = id;
 					sumlogp = Mii.logp;
@@ -375,9 +381,11 @@ int main(int argc, char** argv)
 				if (ii == mend-1 && sumlogp > th0) {
 					int64_t A64 = rel2A(d, Ai, id, bb);
 					int64_t B64 = rel2B(d, Bi, id, bb);
-					if (R1 < 10) cout << A64 << "*x + " << B64 << endl;
-					rel.push_back(id);
-					R1++;
+					if (A64 != 0 && B64 != 0) {
+						if (R1 < 10) cout << A64 << "*x + " << B64 << endl;
+						rel.push_back(id);
+						R1++;
+					}
 				}
 			}
 		}
@@ -393,8 +401,9 @@ int main(int argc, char** argv)
 		
 		// print list of potential relations
 		int R = 0;
-		for (int i = 0; i < rel.size()-1; i++)
+		for (int i = 0; i < rel.size(); i++)
 		{
+			if (i == rel.size() - 1) break;
 			if (rel[i] == rel[i+1] && rel[i] != 0) {
 				int64_t A64 = rel2A(d, Ai, rel[i], bb);
 				int64_t B64 = rel2B(d, Bi, rel[i], bb);
@@ -731,9 +740,8 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 	int R = Rmin;
 	int64_t p = sieve_p[i];
     uint8_t logp = log2f(p);
-	uint64_t mi = 0;
-	for (int i = 0; i < 512; i++, mi += (1<<(mbb-9))) m[i] = mi;
-	int mm[512] = {0};
+	uint64_t mj = 0;
+	for (int j = 0; j < 512; j++, mj += (1<<(mbb-9))) m[j] = mj;
 	while (p < Bmax) {
 		int ni = sieve_n[i];
 		for (int j = 0; j < ni; j++) {
@@ -760,7 +768,7 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 			int64L2(L, d, n);
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
-			int nn = enumerate5d(d, n, L, M, m, mm, logp, R, 1000, bb);
+			int nn = enumerate5d(d, n, L, M, m, logp, R, 1000, bb);
 			to_string(nn);
 		}
 		
@@ -772,23 +780,27 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 	}
 }
 
-void printvector(int d, uint64_t v, int hB)
+void printvector(int d, uint64_t v, int bb)
 {
+	int hB = 1<<(bb-1);
+	int FF = (1<<bb)-1;
 	cout << flush;
-	for (int i = 0; i < d-1; i++) cout << ((int)((v>>(8*i)) & 0xFF)-hB) << ",";
-	cout << ((int)v>>(8*(d-1))-hB) << endl;
+	for (int i = 0; i < d-1; i++) cout << (int)((v>>(bb*i)) & FF)-hB << ",";
+	cout << (int)(v>>(bb*(d-1)))-hB << endl;
 }
 
-void printvectors(int d, vector<uint64_t> &M, int n, int hB)
+void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 {
+	int hB = 1<<(bb-1);
+	int FF = (1<<bb)-1;
 	cout << flush;
 	for (int j = 0; j < n; j++) {
-		for (int i = 0; i < d-1; i++) cout << ((int)((M[j]>>(8*i)) & 0xFF)-hB) << ",";
-		cout << ((int)M[j]>>(8*(d-1))-hB) << endl;
+		for (int i = 0; i < d-1; i++) cout << (int)((M[j]>>(bb*i)) & FF)-hB << ",";
+		cout << (int)(M[j]>>(bb*(d-1)))-hB << endl;
 	}
 }
 
-int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, int* mm, uint8_t logp,
+int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp,
 	int R, int nnmax, int bb)
 {
 	int64_t hB = 1<<(bb-1);
@@ -890,7 +902,6 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, int* mm, uint8
 						mi = mi*id % 509;
 						M[m[mi]] = (keyval){ id, logp };
 						m[mi]++; // we are relying on the TLB
-						mm[mi]++;
 						nn++;
 						if (nn >= nnmax) break;
 					}
