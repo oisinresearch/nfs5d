@@ -22,7 +22,7 @@ file for RSA-155.  Typical parameters are e.g.
 
 ./makesievebase rsa155a.poly 10000000 rsa155a.sievebase
 
-./slcsieve5dx rsa155a.poly rsa155a.sievebase 4 100000 1000000000 5 100000 5000000 1000 3000 70 70 536870912 70 28
+./slcsieve5dx rsa155a.poly rsa155a.sievebase 4 100000 100000 5 100000 5000000 1000 3000 40 40 536870912 40 29
 
 Since I only got this to compile about half an hour ago, all I have managed to get it to
 do is show the divisibility actually does work (e.g. try getting the resultant of the

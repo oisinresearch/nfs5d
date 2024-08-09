@@ -88,7 +88,7 @@ int main(int argc, char** argv)
 	for (int i = 0; i < argc; i++) cout << argv[i] << " ";
 	cout << endl;
 
-	bool verbose = true;//false;
+	bool verbose = false;
 		
 	if (verbose) cout << endl << "Reading input polynomial in file " << argv[1] << "..." << flush;
 	//vector<mpz_class> fpoly;
@@ -318,7 +318,7 @@ int main(int argc, char** argv)
 						int64_t A64 = rel2A(d, Ai, lastid, bb);
 						int64_t B64 = rel2B(d, Bi, lastid, bb);
 						if (A64 != 0 && B64 != 0) {
-							if (R0 < 10) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
 							rel.push_back(lastid);
 							R0++;
 						}
@@ -330,7 +330,7 @@ int main(int argc, char** argv)
 					int64_t A64 = rel2A(d, Ai, id, bb);
 					int64_t B64 = rel2B(d, Bi, id, bb);
 					if (A64 != 0 && B64 != 0) {
-						if (R0 < 10) cout << A64 << "*x + " << B64 << endl;
+						if (R0 < 5) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(id);
 						R0++;
 					}
@@ -348,7 +348,13 @@ int main(int argc, char** argv)
 			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
-		cout << "# Size of lattice point list is " << mm << "." << endl;
+		total = 0;
+		for (int i = 0; i < 512; i++) {
+			uint64_t mtop = i*(1<<(mbb-9));
+			uint64_t mend = m[i];
+			total += (mend - mtop);
+		}		
+		cout << "# Size of lattice point list is " << total << "." << endl;
 		cout << "# Sorting bucket sieve data..." << endl;
 		start = clock();
 		int R1 = 0;
@@ -366,11 +372,11 @@ int main(int argc, char** argv)
 					sumlogp += Mii.logp;
 				}
 				else {
-					if (sumlogp > th0) {
+					if (sumlogp > th1) {
 						int64_t A64 = rel2A(d, Ai, lastid, bb);
 						int64_t B64 = rel2B(d, Bi, lastid, bb);
 						if (A64 != 0 && B64 != 0) {
-							if (R1 < 10) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
 							rel.push_back(lastid);
 							R1++;
 						}
@@ -378,11 +384,11 @@ int main(int argc, char** argv)
 					lastid = id;
 					sumlogp = Mii.logp;
 				}
-				if (ii == mend-1 && sumlogp > th0) {
+				if (ii == mend-1 && sumlogp > th1) {
 					int64_t A64 = rel2A(d, Ai, id, bb);
 					int64_t B64 = rel2B(d, Bi, id, bb);
 					if (A64 != 0 && B64 != 0) {
-						if (R1 < 10) cout << A64 << "*x + " << B64 << endl;
+						if (R1 < 5) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(id);
 						R1++;
 					}
@@ -713,7 +719,7 @@ int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb)
 
 bool bucket_sorter(keyval const& kv1, keyval const& kv2)
 {
-	return kv2.id < kv2.id;
+	return kv2.id < kv1.id;
 }
 
 
@@ -819,6 +825,7 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp,
 	float* ck = new float[d];
 	int* wk = new int[d];
 	int* common_part = new int[d];
+	int32_t* c = new int32_t[d]();
 
 	// Gram-Schmidt orthogonalization
 	int64_t* borig = L;
@@ -878,7 +885,7 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp,
 		if (rhok[k] - 0.00005 <= R*R) {
 			if (k == 0) {
 				if (last_nonzero != 0 || nn == 0) {
-					int32_t* c = new int32_t[d]();
+					memset(c, 0, 4*d);
 					bool keep = true;
 					bool iszero = true;
 					for (int j = 0; j < d; j++) {
@@ -968,6 +975,7 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp,
 		}
 	}
 
+	delete[] c;
 	delete[] common_part;
 	delete[] wk;
 	delete[] ck;
