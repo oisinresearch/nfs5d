@@ -58,6 +58,7 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 	int R, int nnmax, int bb);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
+inline int64_t gcd(int64_t a, int64_t b);
 inline __int128 gcd128(__int128 a, __int128 b);
 void GetlcmScalar(int B, mpz_t S, int* primes, int nump);
 inline __int128 make_int128(uint64_t lo, uint64_t hi);
@@ -414,6 +415,8 @@ int main(int argc, char** argv)
 				int64_t A64 = rel2A(d, Ai, rel[i], bb);
 				int64_t B64 = rel2B(d, Bi, rel[i], bb);
 				if (A64 != 0 && B64 != 0) {
+					int64_t g = gcd(A64, B64);
+					A64 /= g; B64 /= g;
 					if (R < 10) cout << A64 << "*x + " << B64 << endl;
 					R++;
 				}
@@ -778,7 +781,7 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 			int64L2(L, d, n);
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
-			int nn = enumerate5d(d, n, L, M, m, logp, p, R, 1000, bb);
+			int nn = enumerate5d(d, n, L, M, m, logp, p, R, 3000, bb);
 			to_string(nn);
 		}
 		
@@ -994,14 +997,26 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 	return nn;
 }
 
+inline int64_t gcd(int64_t a, int64_t b)
+{
+	a = abs(a);
+	b = abs(b);
+	int64_t c;
+	while (b != 0) {
+		c = b;
+		b = a % c;
+		a = c;
+	}
+	return a;
+}
 
 void GetlcmScalar(int B, mpz_t S, int* primes, int nump)
 {
-    mpz_t* tree = new mpz_t[nump];
-    
-    // Construct product tree
-    int n = 0;
-    mpz_t pe; mpz_init(pe); mpz_t pe1; mpz_init(pe1);
+	mpz_t* tree = new mpz_t[nump];
+	
+	// Construct product tree
+	int n = 0;
+	mpz_t pe; mpz_init(pe); mpz_t pe1; mpz_init(pe1);
 	int p = 2;
 	while (p < B) {
 		// Set tree[n] = p^e, such that p^e < B < p^(e+1)
@@ -1012,26 +1027,26 @@ void GetlcmScalar(int B, mpz_t S, int* primes, int nump)
 		mpz_set(tree[n], pe);
 		n++;
 		p = primes[n];
-    }
-    mpz_clear(pe); mpz_clear(pe1);
-    
-    // Coalesce product tree
-    uint64_t treepos = n - 1;
-    while (treepos > 0) {
-        for (int i = 0; i <= treepos; i += 2) {
-            if(i < treepos)
+	}
+	mpz_clear(pe); mpz_clear(pe1);
+	
+	// Coalesce product tree
+	uint64_t treepos = n - 1;
+	while (treepos > 0) {
+		for (int i = 0; i <= treepos; i += 2) {
+			if(i < treepos)
 				mpz_lcm(tree[i/2], tree[i],tree[i + 1]);
-            else
+			else
 				mpz_set(tree[i/2], tree[i]);
-        }
-        for (int i = (treepos >> 1); i < treepos - 1; i++) mpz_set_ui(tree[i + 1], 1);
-        treepos = treepos >> 1;
-    }
-    // tree[0] is the lcm of all primes with powers bounded by B
-    mpz_set(S, tree[0]);
-        
-    for (int i = 0; i < n; i++) mpz_clear(tree[i]);
-    delete[] tree;
+		}
+		for (int i = (treepos >> 1); i < treepos - 1; i++) mpz_set_ui(tree[i + 1], 1);
+		treepos = treepos >> 1;
+	}
+	// tree[0] is the lcm of all primes with powers bounded by B
+	mpz_set(S, tree[0]);
+		
+	for (int i = 0; i < n; i++) mpz_clear(tree[i]);
+	delete[] tree;
 }
 
 
@@ -1071,20 +1086,20 @@ bool PollardPm1(mpz_t N, mpz_t S, mpz_t factor)
 
 bool PollardPm1_mpz(mpz_t N, mpz_t S, mpz_t factor)
 {
-    int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
+	int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
 	mpz_t g; mpz_init_set_ui(g, 2);
-      
-    // Scalar multiplication using square and multiply
-    for (int i = 2; i <= L; i++) {
-        // square
+	  
+	// Scalar multiplication using square and multiply
+	for (int i = 2; i <= L; i++) {
+		// square
 		mpz_mul(g, g, g);
 		mpz_mod(g, g, N);
-        if (mpz_tstbit(S, L - i) == 1) {
-            // multiply
+		if (mpz_tstbit(S, L - i) == 1) {
+			// multiply
 			mpz_mul_2exp(g, g, 1);
 			if (mpz_cmpabs(g, N) >= 0) mpz_sub(g, g, N);
-        }
-    }
+		}
+	}
 	// subtract 1
 	mpz_sub_ui(g, g, 1);
 	// compute gcd
@@ -1112,20 +1127,20 @@ inline __int128 gcd128(__int128 a, __int128 b)
 
 bool PollardPm1_int128(__int128 N, mpz_t S, __int128 &factor, int64_t mulo, int64_t muhi)
 {
-    int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
+	int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
 	__int128 g = 2;
-      
-    // Scalar multiplication using square and multiply
-    for (int i = 2; i <= L; i++) {
-        // square
+	  
+	// Scalar multiplication using square and multiply
+	for (int i = 2; i <= L; i++) {
+		// square
 		g = g * g;
 		g = g % N;
-        if (mpz_tstbit(S, L - i) == 1) {
-            // multiply
+		if (mpz_tstbit(S, L - i) == 1) {
+			// multiply
 			g = g * 2;
 			if (g >= N) g -= N; 
-        }
-    }
+		}
+	}
 	// subtract 1
 	g = g - 1;
 	// compute gcd
@@ -1183,78 +1198,78 @@ bool EECM(mpz_t N, mpz_t S, mpz_t factor, int d, int a, int X0, int Y0, int Z0)
 bool EECM_mpz(mpz_t N, mpz_t S, mpz_t factor, int d, int a, int X0, int Y0, int Z0)
 {
 	mpz_t SX, SY, SZ;
-    mpz_t A, B, B2, B3, C, dC, B2mC, D, CaD, B2mCmD, E, EmD, F, AF, G, AG, aC, DmaC, H, Hx2, J;
-    mpz_t X0aY0, X0aY0xB, X0aY0xB_mCmD, X, Y, Z, mulmod;
-    
-    mpz_init(A); mpz_init(B); mpz_init(B2); mpz_init(B3); mpz_init(C); mpz_init(dC); mpz_init(B2mC); 
-    mpz_init(D); mpz_init(CaD); mpz_init(B2mCmD); mpz_init(E); mpz_init(EmD); mpz_init(F); mpz_init(AF);
-    mpz_init(G); mpz_init(AG); mpz_init(aC); mpz_init(DmaC); mpz_init(H); mpz_init(Hx2); mpz_init(J);
-    mpz_init(X0aY0xB); mpz_init(X0aY0xB_mCmD); mpz_init(X); mpz_init(Y); mpz_init(Z);
-    
+	mpz_t A, B, B2, B3, C, dC, B2mC, D, CaD, B2mCmD, E, EmD, F, AF, G, AG, aC, DmaC, H, Hx2, J;
+	mpz_t X0aY0, X0aY0xB, X0aY0xB_mCmD, X, Y, Z, mulmod;
+	
+	mpz_init(A); mpz_init(B); mpz_init(B2); mpz_init(B3); mpz_init(C); mpz_init(dC); mpz_init(B2mC); 
+	mpz_init(D); mpz_init(CaD); mpz_init(B2mCmD); mpz_init(E); mpz_init(EmD); mpz_init(F); mpz_init(AF);
+	mpz_init(G); mpz_init(AG); mpz_init(aC); mpz_init(DmaC); mpz_init(H); mpz_init(Hx2); mpz_init(J);
+	mpz_init(X0aY0xB); mpz_init(X0aY0xB_mCmD); mpz_init(X); mpz_init(Y); mpz_init(Z);
+	
 	mpz_init_set_ui(SX, X0);
 	mpz_init_set_ui(SY, Y0);
 	mpz_init_set_ui(SZ, Z0);
-    
+	
 	mpz_init(mulmod);
 //int len=mpz_sizeinbase(N,2);if(len > 64 && len < 128) cout << mpz_get_str(NULL,10,N) << endl; 
-    int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
-    
-    // Scalar multiplication using double & add algorithm
-    // doubling formula: [2](x:y:z) = ((B-C-D)*J:F*(E-D):F*J)
-    for(int i = 2; i <= L; i++) {
-        // double
-        mpz_add(B, SX, SY);
-        mpz_mul(mulmod, B, B); mpz_mod(B2, mulmod, N);
-        mpz_mul(mulmod, SX, SX); mpz_mod(C, mulmod, N);
-        mpz_mul(mulmod, SY, SY); mpz_mod(D, mulmod, N);
-        mpz_mul_ui(E, C, a);
-        mpz_add(F, E, D);
-        mpz_mul(mulmod, SZ, SZ); mpz_mod(H, mulmod, N);
-        mpz_mul_2exp(Hx2, H, 1);
-        mpz_sub(J, F, Hx2);
-        mpz_add(CaD, C, D);
-        mpz_sub(B2mCmD, B2, CaD);
-        mpz_mul(X, B2mCmD, J);
-        mpz_sub(EmD, E, D);
-        mpz_mul(Y, F, EmD);
-        mpz_mul(Z, F, J);
-        mpz_mod(SX, X, N);
-        mpz_mod(SY, Y, N);
-        mpz_mod(SZ, Z, N);
-        if(mpz_tstbit(S, L - i) == 1) {
-            // add
-            mpz_mul_ui(A, SZ, Z0);
-            mpz_add(B, SX, SY);
-            mpz_mul(mulmod, A, A); mpz_mod(B3, mulmod, N);
-            mpz_mul_ui(C, SX, X0);
-            mpz_mul_ui(D, SY, Y0);
-            mpz_mul_ui(dC, C, d);
-            mpz_add(CaD, C, D);
-            mpz_mul(mulmod, dC, D); mpz_mod(E, mulmod, N);
-            mpz_sub(F, B3, E);
-            mpz_add(G, B3, E);
-            mpz_mul_ui(mulmod, B, X0+Y0); mpz_mod(X0aY0xB, mulmod, N);
-            mpz_sub(X0aY0xB_mCmD, X0aY0xB, CaD);
-            mpz_mul(mulmod, A, F); mpz_mod(AF, mulmod, N);
-            mpz_mul(X, AF, X0aY0xB_mCmD);
-            mpz_mul(mulmod, A, G); mpz_mod(AG, mulmod, N);
-            mpz_mul_ui(aC, C, a);
-            mpz_sub(DmaC, D, aC);
-            mpz_mul(Y, AG, DmaC);
-            mpz_mul(Z, F, G);
-            mpz_mod(SX, X, N);
-            mpz_mod(SY, Y, N);
-            mpz_mod(SZ, Z, N);
-        }
-    }
+	int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
+	
+	// Scalar multiplication using double & add algorithm
+	// doubling formula: [2](x:y:z) = ((B-C-D)*J:F*(E-D):F*J)
+	for(int i = 2; i <= L; i++) {
+		// double
+		mpz_add(B, SX, SY);
+		mpz_mul(mulmod, B, B); mpz_mod(B2, mulmod, N);
+		mpz_mul(mulmod, SX, SX); mpz_mod(C, mulmod, N);
+		mpz_mul(mulmod, SY, SY); mpz_mod(D, mulmod, N);
+		mpz_mul_ui(E, C, a);
+		mpz_add(F, E, D);
+		mpz_mul(mulmod, SZ, SZ); mpz_mod(H, mulmod, N);
+		mpz_mul_2exp(Hx2, H, 1);
+		mpz_sub(J, F, Hx2);
+		mpz_add(CaD, C, D);
+		mpz_sub(B2mCmD, B2, CaD);
+		mpz_mul(X, B2mCmD, J);
+		mpz_sub(EmD, E, D);
+		mpz_mul(Y, F, EmD);
+		mpz_mul(Z, F, J);
+		mpz_mod(SX, X, N);
+		mpz_mod(SY, Y, N);
+		mpz_mod(SZ, Z, N);
+		if(mpz_tstbit(S, L - i) == 1) {
+			// add
+			mpz_mul_ui(A, SZ, Z0);
+			mpz_add(B, SX, SY);
+			mpz_mul(mulmod, A, A); mpz_mod(B3, mulmod, N);
+			mpz_mul_ui(C, SX, X0);
+			mpz_mul_ui(D, SY, Y0);
+			mpz_mul_ui(dC, C, d);
+			mpz_add(CaD, C, D);
+			mpz_mul(mulmod, dC, D); mpz_mod(E, mulmod, N);
+			mpz_sub(F, B3, E);
+			mpz_add(G, B3, E);
+			mpz_mul_ui(mulmod, B, X0+Y0); mpz_mod(X0aY0xB, mulmod, N);
+			mpz_sub(X0aY0xB_mCmD, X0aY0xB, CaD);
+			mpz_mul(mulmod, A, F); mpz_mod(AF, mulmod, N);
+			mpz_mul(X, AF, X0aY0xB_mCmD);
+			mpz_mul(mulmod, A, G); mpz_mod(AG, mulmod, N);
+			mpz_mul_ui(aC, C, a);
+			mpz_sub(DmaC, D, aC);
+			mpz_mul(Y, AG, DmaC);
+			mpz_mul(Z, F, G);
+			mpz_mod(SX, X, N);
+			mpz_mod(SY, Y, N);
+			mpz_mod(SZ, Z, N);
+		}
+	}
 	// try to retrieve factor
 	mpz_gcd(factor, N, SX);
 
 	mpz_clear(mulmod); mpz_clear(SZ); mpz_clear(SY); mpz_clear(SX);
-    mpz_clear(A); mpz_clear(B); mpz_clear(B2); mpz_clear(B3); mpz_clear(C); mpz_clear(dC); mpz_clear(B2mC); 
-    mpz_clear(D); mpz_clear(CaD); mpz_clear(B2mCmD); mpz_clear(E); mpz_clear(EmD); mpz_clear(F); mpz_clear(AF);
-    mpz_clear(G); mpz_clear(AG); mpz_clear(aC); mpz_clear(DmaC); mpz_clear(H); mpz_clear(Hx2); mpz_clear(J);
-    mpz_clear(X0aY0xB); mpz_clear(X0aY0xB_mCmD); mpz_clear(X); mpz_clear(Y); mpz_clear(Z);
+	mpz_clear(A); mpz_clear(B); mpz_clear(B2); mpz_clear(B3); mpz_clear(C); mpz_clear(dC); mpz_clear(B2mC); 
+	mpz_clear(D); mpz_clear(CaD); mpz_clear(B2mCmD); mpz_clear(E); mpz_clear(EmD); mpz_clear(F); mpz_clear(AF);
+	mpz_clear(G); mpz_clear(AG); mpz_clear(aC); mpz_clear(DmaC); mpz_clear(H); mpz_clear(Hx2); mpz_clear(J);
+	mpz_clear(X0aY0xB); mpz_clear(X0aY0xB_mCmD); mpz_clear(X); mpz_clear(Y); mpz_clear(Z);
 	
 	bool result = mpz_cmpabs_ui(factor, 1) > 0 && mpz_cmpabs(factor, N) < 0;
 	//if (result) cout << endl << endl << "\t\t\tEECM worked!!!!" << endl << endl;
@@ -1276,20 +1291,20 @@ bool EECM_mpz(mpz_t N, mpz_t S, mpz_t factor, int d, int a, int X0, int Y0, int 
 bool EECM_int128(__int128 N, mpz_t S, __int128 &factor, int d, int a, int X0, int Y0, int Z0, int64_t mulo, int64_t muhi)
 {
 	__int128 SX, SY, SZ;
-    __int128 A, B, B2, B3, C, dC, B2mC, D, CaD, B2mCmD, E, EmD, F, AF, G, AG, aC, DmaC, H, Hx2, J;
-    __int128 X0aY0, X0aY0xB, X0aY0xB_mCmD, X, Y, Z, mulmod;
+	__int128 A, B, B2, B3, C, dC, B2mC, D, CaD, B2mCmD, E, EmD, F, AF, G, AG, aC, DmaC, H, Hx2, J;
+	__int128 X0aY0, X0aY0xB, X0aY0xB_mCmD, X, Y, Z, mulmod;
    
    	SX = X0;
 	SY = Y-1;
 	SZ = Z0;
-    int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
-    
-    // Scalar multiplication using double & add algorithm
-    // doubling formula: [2](x:y:z) = ((B-C-D)*J:F*(E-D):F*J)
-    for(int i = 2; i <= L; i++) {
-        // double
-        B = SX + SY;
-        B2 = (B * B) % N;
+	int L = mpz_sizeinbase(S, 2); // exact for base = power of 2
+	
+	// Scalar multiplication using double & add algorithm
+	// doubling formula: [2](x:y:z) = ((B-C-D)*J:F*(E-D):F*J)
+	for(int i = 2; i <= L; i++) {
+		// double
+		B = SX + SY;
+		B2 = (B * B) % N;
 		C = (SX * SX) % N;
 		D = (SY * SY) % N;
 		E = C * a;
@@ -1306,8 +1321,8 @@ bool EECM_int128(__int128 N, mpz_t S, __int128 &factor, int d, int a, int X0, in
 		SX = X % N;
 		SY = Y % N;
 		SZ = Z % N;
-        if(mpz_tstbit(S, L - i) == 1) {
-            // add
+		if(mpz_tstbit(S, L - i) == 1) {
+			// add
 			A = SZ * Z0;
 			B = SX + SY;
 			B3 = (A * A) % N;
@@ -1330,8 +1345,8 @@ bool EECM_int128(__int128 N, mpz_t S, __int128 &factor, int d, int a, int X0, in
 			SX = X % N;
 			SY = Y % N;
 			SZ = Z % N;
-        }
-    }
+		}
+	}
 	// try to retrieve factor
 	factor = gcd128(N, SX);
 
