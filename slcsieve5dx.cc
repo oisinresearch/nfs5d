@@ -54,7 +54,7 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 	 int mbb, int bb);
 int64_t rel2A(int d, mpz_t* Ai, int64_t reli, int bb);
 int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb);
-int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp,
+int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
 	int R, int nnmax, int bb);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
@@ -307,7 +307,7 @@ int main(int argc, char** argv)
 			keyval Mmtop = M[mtop];
 			uint64_t lastid = Mmtop.id;
 			int sumlogp = Mmtop.logp;
-			for (uint64_t ii = mtop; ii < mend; ii++) {
+			for (uint64_t ii = mtop + 1; ii < mend; ii++) {
 				keyval Mii = M[ii];
 				uint64_t id = Mii.id;
 				if (id == lastid) {
@@ -318,7 +318,7 @@ int main(int argc, char** argv)
 						int64_t A64 = rel2A(d, Ai, lastid, bb);
 						int64_t B64 = rel2B(d, Bi, lastid, bb);
 						if (A64 != 0 && B64 != 0) {
-							if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							//if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
 							rel.push_back(lastid);
 							R0++;
 						}
@@ -330,7 +330,7 @@ int main(int argc, char** argv)
 					int64_t A64 = rel2A(d, Ai, id, bb);
 					int64_t B64 = rel2B(d, Bi, id, bb);
 					if (A64 != 0 && B64 != 0) {
-						if (R0 < 5) cout << A64 << "*x + " << B64 << endl;
+						//if (R0 < 5) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(id);
 						R0++;
 					}
@@ -365,7 +365,7 @@ int main(int argc, char** argv)
 			keyval Mmtop = M[mtop];
 			uint64_t lastid = Mmtop.id;
 			int sumlogp = Mmtop.logp;
-			for (uint64_t ii = mtop; ii < mend; ii++) {
+			for (uint64_t ii = mtop + 1; ii < mend; ii++) {
 				keyval Mii = M[ii];
 				uint64_t id = Mii.id;
 				if (id == lastid) {
@@ -376,7 +376,7 @@ int main(int argc, char** argv)
 						int64_t A64 = rel2A(d, Ai, lastid, bb);
 						int64_t B64 = rel2B(d, Bi, lastid, bb);
 						if (A64 != 0 && B64 != 0) {
-							if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							//if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
 							rel.push_back(lastid);
 							R1++;
 						}
@@ -388,7 +388,7 @@ int main(int argc, char** argv)
 					int64_t A64 = rel2A(d, Ai, id, bb);
 					int64_t B64 = rel2B(d, Bi, id, bb);
 					if (A64 != 0 && B64 != 0) {
-						if (R1 < 5) cout << A64 << "*x + " << B64 << endl;
+						//if (R1 < 5) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(id);
 						R1++;
 					}
@@ -414,229 +414,233 @@ int main(int argc, char** argv)
 				int64_t A64 = rel2A(d, Ai, rel[i], bb);
 				int64_t B64 = rel2B(d, Bi, rel[i], bb);
 				if (A64 != 0 && B64 != 0) {
+					if (R < 10) cout << A64 << "*x + " << B64 << endl;
 					R++;
 				}
 			}
 		}
 		cout << "# " << R << " potential relations found." << endl << flush;
-		
-		// compute and factor resultants as much as possible.
-		int BASE = 16;
-		stack<mpz_t*> QN; stack<int> Q; int algarr[3]; mpz_t* N;
-		start = clock();
-		R = 0;
-		if (verbose) cout << "Starting cofactorizaion..." << endl;
-		for (int i = 0; i < (int)(rel.size()-1); i++)
-		{
-			// construct A*x + B from small linear combinations
-			int64_t A64 = rel2A(d, Ai, rel[i], bb);
-			int64_t B64 = rel2B(d, Bi, rel[i], bb);
-			mpz_set_si(A, A64); mpz_set_si(B, B64);
-
-			// remove content of A*x + B
-			mpz_gcd(g1, A, B);
-			mpz_divexact(A, A, g1);
-			mpz_divexact(B, B, g1);
-
-			// set relation principal ideal generater i1 = A*x + B and compute norms
-			mpz_poly_setcoeff(i1, 1, A);
-			mpz_poly_setcoeff(i1, 0, B);
-			mpz_poly_resultant(N0, f0, i1);
-			mpz_poly_resultant(N1, f1, i1);
-			mpz_abs(N0, N0);
-			mpz_abs(N1, N1);
-			//cout << mpz_get_str(NULL, 10, N0) << endl;
-			//cout << mpz_get_str(NULL, 10, N1) << endl;
-
-			mpz_get_str(str1, 10, A);
-			mpz_get_str(str2, 10, B);
-			string str = string(str1) + "," + string(str2) + ":";
+	
+		if (R > 0) {
+			// compute and factor resultants as much as possible.
+			int BASE = 16;
+			stack<mpz_t*> QN; stack<int> Q; int algarr[3]; mpz_t* N;
+			start = clock();
+			R = 0;
+			if (verbose) cout << "Starting cofactorizaion..." << endl;
+			for (int i = 0; i < (int)(rel.size()-1); i++) {
+				if (rel[i] == rel[i+1] && rel[i] != 0) {
+					// construct A*x + B from small linear combinations
+					int64_t A64 = rel2A(d, Ai, rel[i], bb);
+					int64_t B64 = rel2B(d, Bi, rel[i], bb);
+					mpz_set_si(A, A64); mpz_set_si(B, B64);
 					
-			// trial division on side 0
-			int p = primes[0]; int k = 0; 
-			while (p < sieve_p0[k0-1]) {
-				int valp = 0;
-				while (mpz_fdiv_ui(N0, p) == 0) {
-					mpz_divexact_ui(N0, N0, p);
-					valp++;
-					stream.str("");
-					stream << hex << p;
-					str += stream.str() + ",";
-				}
-				if (p < 1000) {
-					p = primes[++k];
-					if (p > 1000) {
-						k = 0;
-						while (sieve_p0[k] < 1000) k++;
-					}
-				}
-				else {
-					p = sieve_p0[++k];
-				}
-			}
-			bool isrel = true;
-			bool cofactor = true;
-			if (mpz_cmp_ui(N0, 1) == 0) { cofactor = false; }
-			str += (cofactor ? "," : "");
-			// cofactorization on side 0
-			int ii = 0; while (!Q.empty()) Q.pop(); while (!QN.empty()) QN.pop();
-			if (cofactor) {
-				if (mpz_probab_prime_p(N0, 30) == 0) {  // cofactor definitely composite
-					
-					QN.push(&N0); Q.push(2); Q.push(1); Q.push(0); Q.push(3);
-					while (!QN.empty()) {
-						mpz_t* N = QN.top(); QN.pop();
-						int l = Q.top(); Q.pop();
-						int j = 0;
-						bool factored = false;
-						while (!factored) {
-							int alg = Q.top(); Q.pop(); j++;
-							switch (alg) {
-								case 0: factored = PollardPm1(*N, S, factor);
-										break;	
-								case 1: factored = EECM(*N, S, factor, 25921, 83521, 19, 9537, 2737);
-										break;	
-								case 2: factored = EECM(*N, S, factor, 1681, 707281, 3, 19642, 19803);
-										break;	
+					// remove content of A*x + B
+					mpz_gcd(g1, A, B);
+					mpz_divexact(A, A, g1);
+					mpz_divexact(B, B, g1);
+
+					// set relation principal ideal generater i1 = A*x + B and compute norms
+					mpz_poly_setcoeff(i1, 1, A);
+					mpz_poly_setcoeff(i1, 0, B);
+					mpz_poly_resultant(N0, f0, i1);
+					mpz_poly_resultant(N1, f1, i1);
+					mpz_abs(N0, N0);
+					mpz_abs(N1, N1);
+					//cout << mpz_get_str(NULL, 10, N0) << endl;
+					//cout << mpz_get_str(NULL, 10, N1) << endl;
+
+					mpz_get_str(str1, 10, A);
+					mpz_get_str(str2, 10, B);
+					string str = string(str1) + "," + string(str2) + ":";
+							
+					// trial division on side 0
+					int p = primes[0]; int k = 0; 
+					while (p < sieve_p0[k0-1]) {
+						int valp = 0;
+						while (mpz_fdiv_ui(N0, p) == 0) {
+							mpz_divexact_ui(N0, N0, p);
+							valp++;
+							stream.str("");
+							stream << hex << p;
+							str += stream.str() + ",";
+						}
+						if (p < 1000) {
+							p = primes[++k];
+							if (p > 1000) {
+								k = 0;
+								while (sieve_p0[k] < 1000) k++;
 							}
-							if ( !factored ) {
-								if ( j >= l ) { isrel = false; break; }
+						}
+						else {
+							p = sieve_p0[++k];
+						}
+					}
+					bool isrel = true;
+					bool cofactor = true;
+					if (mpz_cmp_ui(N0, 1) == 0) { cofactor = false; }
+					str += (cofactor ? "," : "");
+					// cofactorization on side 0
+					int ii = 0; while (!Q.empty()) Q.pop(); while (!QN.empty()) QN.pop();
+					if (cofactor) {
+						if (mpz_probab_prime_p(N0, 30) == 0) {  // cofactor definitely composite
+							
+							QN.push(&N0); Q.push(2); Q.push(1); Q.push(0); Q.push(3);
+							while (!QN.empty()) {
+								mpz_t* N = QN.top(); QN.pop();
+								int l = Q.top(); Q.pop();
+								int j = 0;
+								bool factored = false;
+								while (!factored) {
+									int alg = Q.top(); Q.pop(); j++;
+									switch (alg) {
+										case 0: factored = PollardPm1(*N, S, factor);
+												break;	
+										case 1: factored = EECM(*N, S, factor, 25921, 83521, 19, 9537, 2737);
+												break;	
+										case 2: factored = EECM(*N, S, factor, 1681, 707281, 3, 19642, 19803);
+												break;	
+									}
+									if ( !factored ) {
+										if ( j >= l ) { isrel = false; break; }
+									}
+									else {
+										mpz_set(p1, factor);
+										mpz_divexact(p2, *N, factor);
+										if (mpz_cmpabs(p1, p2) > 0) {
+											 mpz_set(t, p1); mpz_set(p1, p2); mpz_set(p2, t);	// sort
+										}
+										// save remaining algs to array
+										int lnext = l - j; int lt = lnext;
+										while (lt--) { algarr[lt] = Q.top(); Q.pop(); }
+										lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+										if (mpz_probab_prime_p(p1, 30)) {
+											if (mpz_cmpabs(p1, lpb) > 0) { isrel = false; break; }
+											else { mpz_get_str(str2, BASE, p1); str += str2; str += ","; }
+										}
+										else {
+											if (!lnext) { isrel = false; break; }
+											mpz_set(pi[ii], p1);
+											QN.push(&pi[ii++]);
+											lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+										}
+										if (mpz_probab_prime_p(p2, 30)) {
+											if (mpz_cmpabs(p2, lpb) > 0) { isrel = false; break; }
+											else { mpz_get_str(str2, BASE, p2); str += str2; str += QN.empty() ? "" : ","; }
+										}
+										else {
+											if (!lnext) { isrel = false; break; }
+											mpz_set(pi[ii], p2);
+											QN.push(&pi[ii++]);
+											lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+										}
+									}
+								}
+								if (!isrel) break;
+							}
+						}
+						else {	// cofactor prime but is it < lpb?
+							if (mpz_cmpabs(N0, lpb) > 0) isrel = false;
+							else { mpz_get_str(str2, BASE, N0); str += str2; }
+						}
+					}
+					
+					str += ":";
+
+					// trial division on side 1
+					if (isrel) {
+						p = primes[0]; k = 0;
+						while (p < sieve_p1[k1-1]) {
+							int valp = 0;
+							while (mpz_fdiv_ui(N1, p) == 0) {
+								mpz_divexact_ui(N1, N1, p);
+								valp++;
+								stream.str("");
+								stream << hex << p;
+								str += stream.str() + ",";
+							}
+							if (p < 1000) {
+								p = primes[++k];
+								if (p > 1000) {
+									k = 0;
+									while (sieve_p1[k] < 1000) k++;
+								}
 							}
 							else {
-								mpz_set(p1, factor);
-								mpz_divexact(p2, *N, factor);
-								if (mpz_cmpabs(p1, p2) > 0) {
-									 mpz_set(t, p1); mpz_set(p1, p2); mpz_set(p2, t);	// sort
-								}
-								// save remaining algs to array
-								int lnext = l - j; int lt = lnext;
-								while (lt--) { algarr[lt] = Q.top(); Q.pop(); }
-								lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
-								if (mpz_probab_prime_p(p1, 30)) {
-									if (mpz_cmpabs(p1, lpb) > 0) { isrel = false; break; }
-									else { mpz_get_str(str2, BASE, p1); str += str2; str += ","; }
-								}
-								else {
-									if (!lnext) { isrel = false; break; }
-									mpz_set(pi[ii], p1);
-									QN.push(&pi[ii++]);
-									lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
-								}
-								if (mpz_probab_prime_p(p2, 30)) {
-									if (mpz_cmpabs(p2, lpb) > 0) { isrel = false; break; }
-									else { mpz_get_str(str2, BASE, p2); str += str2; str += QN.empty() ? "" : ","; }
-								}
-								else {
-									if (!lnext) { isrel = false; break; }
-									mpz_set(pi[ii], p2);
-									QN.push(&pi[ii++]);
-									lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
-								}
+								p = sieve_p1[++k];
 							}
 						}
-						if (!isrel) break;
-					}
-				}
-				else {	// cofactor prime but is it < lpb?
-					if (mpz_cmpabs(N0, lpb) > 0) isrel = false;
-					else { mpz_get_str(str2, BASE, N0); str += str2; }
-				}
-			}
-			
-			str += ":";
-
-			// trial division on side 1
-			if (isrel) {
-				p = primes[0]; k = 0;
-				while (p < sieve_p1[k1-1]) {
-					int valp = 0;
-					while (mpz_fdiv_ui(N1, p) == 0) {
-						mpz_divexact_ui(N1, N1, p);
-						valp++;
-						stream.str("");
-						stream << hex << p;
-						str += stream.str() + ",";
-					}
-					if (p < 1000) {
-						p = primes[++k];
-						if (p > 1000) {
-							k = 0;
-							while (sieve_p1[k] < 1000) k++;
-						}
-					}
-					else {
-						p = sieve_p1[++k];
-					}
-				}
-				bool cofactor = true;
-				if (mpz_cmp_ui(N1, 1) == 0) { cofactor = false; }
-				str += (cofactor ? "," : "");
-				// cofactorization on side 1
-				ii = 0; while (!Q.empty()) Q.pop(); while (!QN.empty()) QN.pop();
-				if (cofactor) {
-					if (mpz_probab_prime_p(N1, 30) == 0) {  // cofactor definitely composite
-						
-						QN.push(&N1); Q.push(2); Q.push(1); Q.push(0); Q.push(3);
-						while (!QN.empty()) {
-							mpz_t* N = QN.top(); QN.pop();
-							int l = Q.top(); Q.pop();
-							int j = 0;
-							bool factored = false;
-							while (!factored) {
-								int alg = Q.top(); Q.pop(); j++;
-								switch (alg) {
-									case 0: factored = PollardPm1(*N, S, factor);
-											break;	
-									case 1: factored = EECM(*N, S, factor, 25921, 83521, 19, 9537, 2737);
-											break;	
-									case 2: factored = EECM(*N, S, factor, 1681, 707281, 3, 19642, 19803);
-											break;	
-								}
-								if ( !factored ) {
-									if ( j >= l ) { isrel = false; break; }
-								}
-								else {
-									mpz_set(p1, factor);
-									mpz_divexact(p2, *N, factor);
-									if (mpz_cmpabs(p1, p2) > 0) {
-										 mpz_set(t, p1); mpz_set(p1, p2); mpz_set(p2, t);	// sort
+						bool cofactor = true;
+						if (mpz_cmp_ui(N1, 1) == 0) { cofactor = false; }
+						str += (cofactor ? "," : "");
+						// cofactorization on side 1
+						ii = 0; while (!Q.empty()) Q.pop(); while (!QN.empty()) QN.pop();
+						if (cofactor) {
+							if (mpz_probab_prime_p(N1, 30) == 0) {  // cofactor definitely composite
+								
+								QN.push(&N1); Q.push(2); Q.push(1); Q.push(0); Q.push(3);
+								while (!QN.empty()) {
+									mpz_t* N = QN.top(); QN.pop();
+									int l = Q.top(); Q.pop();
+									int j = 0;
+									bool factored = false;
+									while (!factored) {
+										int alg = Q.top(); Q.pop(); j++;
+										switch (alg) {
+											case 0: factored = PollardPm1(*N, S, factor);
+													break;	
+											case 1: factored = EECM(*N, S, factor, 25921, 83521, 19, 9537, 2737);
+													break;	
+											case 2: factored = EECM(*N, S, factor, 1681, 707281, 3, 19642, 19803);
+													break;	
+										}
+										if ( !factored ) {
+											if ( j >= l ) { isrel = false; break; }
+										}
+										else {
+											mpz_set(p1, factor);
+											mpz_divexact(p2, *N, factor);
+											if (mpz_cmpabs(p1, p2) > 0) {
+												 mpz_set(t, p1); mpz_set(p1, p2); mpz_set(p2, t);	// sort
+											}
+											// save remaining algs to array
+											int lnext = l - j; int lt = lnext;
+											while (lt--) { algarr[lt] = Q.top(); Q.pop(); }
+											lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+											if (mpz_probab_prime_p(p1, 30)) {
+												if (mpz_cmpabs(p1, lpb) > 0) { isrel = false; break; }
+												else { mpz_get_str(str2, BASE, p1); str += str2; str += ","; }
+											}
+											else {
+												if (!lnext) { isrel = false; break; }
+												mpz_set(pi[ii], p1);
+												QN.push(&pi[ii++]);
+												lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+											}
+											if (mpz_probab_prime_p(p2, 30)) {
+												if (mpz_cmpabs(p2, lpb) > 0) { isrel = false; break; }
+												else { mpz_get_str(str2, BASE, p2); str += str2; str += QN.empty() ? "" : ","; }
+											}
+											else {
+												if (!lnext) { isrel = false; break; }
+												mpz_set(pi[ii], p2);
+												QN.push(&pi[ii++]);
+												lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+											}
+										}
 									}
-									// save remaining algs to array
-									int lnext = l - j; int lt = lnext;
-									while (lt--) { algarr[lt] = Q.top(); Q.pop(); }
-									lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
-									if (mpz_probab_prime_p(p1, 30)) {
-										if (mpz_cmpabs(p1, lpb) > 0) { isrel = false; break; }
-										else { mpz_get_str(str2, BASE, p1); str += str2; str += ","; }
-									}
-									else {
-										if (!lnext) { isrel = false; break; }
-										mpz_set(pi[ii], p1);
-										QN.push(&pi[ii++]);
-										lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
-									}
-									if (mpz_probab_prime_p(p2, 30)) {
-										if (mpz_cmpabs(p2, lpb) > 0) { isrel = false; break; }
-										else { mpz_get_str(str2, BASE, p2); str += str2; str += QN.empty() ? "" : ","; }
-									}
-									else {
-										if (!lnext) { isrel = false; break; }
-										mpz_set(pi[ii], p2);
-										QN.push(&pi[ii++]);
-										lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
-									}
+									if (!isrel) break;
 								}
 							}
-							if (!isrel) break;
+							else {	// cofactor prime but is it < lpb?
+								if (mpz_cmpabs(N1, lpb) > 0) isrel = false;
+								else { mpz_get_str(str2, BASE, N1); str += str2; }
+							}
 						}
-					}
-					else {	// cofactor prime but is it < lpb?
-						if (mpz_cmpabs(N1, lpb) > 0) isrel = false;
-						else { mpz_get_str(str2, BASE, N1); str += str2; }
+
+						if (isrel) { cout << str << endl; R++; }
 					}
 				}
-
-				if (isrel) { cout << str << endl; R++; }
 			}
 		}
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
@@ -774,7 +778,7 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 			int64L2(L, d, n);
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
-			int nn = enumerate5d(d, n, L, M, m, logp, R, 1000, bb);
+			int nn = enumerate5d(d, n, L, M, m, logp, p, R, 1000, bb);
 			to_string(nn);
 		}
 		
@@ -806,7 +810,7 @@ void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 	}
 }
 
-int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp,
+int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
 	int R, int nnmax, int bb)
 {
 	int64_t hB = 1<<(bb-1);
