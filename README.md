@@ -20,16 +20,15 @@ and you will get two files, makesievebase, which creates the factor base, and
 slcsieve5dx, which is implements the 5d version of the idea.  I have included a polynomial
 file for RSA-155.  Typical parameters are e.g.
 
-./makesievebase rsa155a.poly 10000000 rsa155a.sievebase
+export OMP_NUM_THREADS=16
+./makesievebase rsa155b.poly 10000000 rsa155b.sievebase
 
-./slcsieve5dx rsa155a.poly rsa155a.sievebase 4 100000 100000 5 100000 5000000 1000 3000 40 40 536870912 40 29
+./slcsieve5dx rsa155b.poly rsa155b.sievebase 4 1000 10000000 20 50000 10000000 60 100 55 50 536870912 11 28
 
-Since I only got this to compile about half an hour ago, all I have managed to get it to
-do is show the divisibility actually does work (e.g. try getting the resultant of the
-A*x + B with the RSA-155 polynomial, it will be divisible by primes in the factor base),
-but no relations for RSA-155 as of yet.
-
-Of course this might change if the program parameters can be optimized.
+After changing the divisibility strategy with a better lattice reduction,
+the program is now producing valid relations (try the above command line on
+the current main branch).  There is still of course much room for improvement,
+there has been no real performance optimization so far.
 
 ### License
 &copy; 2024, Oisin Robinson.
