@@ -80,7 +80,7 @@ int main(int argc, char** argv)
 	//cout << (uint64_t)(MASK64) << " " << (uint64_t)(MASK64 >> 64) << endl;
 
 	if (argc != 16) {
-		cout << endl << "Usage: ./slcsieve inputpoly factorbasefile numlc Amax Bmax N "
+		cout << endl << "Usage: ./slcsieve inputpoly factorbasefile d Amax Bmax N "
 			"Bmin Bmax Rmin Rmax th0 th1 lpb cofmaxbits mbb" << endl << endl;
 		return 0;
 	}
@@ -206,7 +206,7 @@ int main(int argc, char** argv)
 	int64_t p0max = sieve_p0[k0-1];
 	int64_t p1max = sieve_p1[k1-1];
 
-	int numlc = atoi(argv[3]);
+	int d = atoi(argv[3]);
 	mpz_t maxA, maxB;
 	mpz_init_set_str(maxA, argv[4], 10);
 	mpz_init_set_str(maxB, argv[5], 10);
@@ -247,10 +247,10 @@ int main(int argc, char** argv)
 	char* str1 = (char*)malloc(20*sizeof(char));
 	char* str2 = (char*)malloc(20*sizeof(char));
 
-	// construct array to hold numlc elements of Z[x]
-	mpz_t* Ai = new mpz_t[numlc];
-	mpz_t* Bi = new mpz_t[numlc];
-	for (int i = 0; i < numlc; i++) {
+	// construct array to hold d - 2 elements of Z[x]
+	mpz_t* Ai = new mpz_t[d - 2];
+	mpz_t* Bi = new mpz_t[d - 2];
+	for (int i = 0; i < d - 2; i++) {
 		mpz_init_set_ui(Ai[i], 0);
 		mpz_init_set_ui(Bi[i], 0);
 	}
@@ -264,7 +264,7 @@ int main(int argc, char** argv)
 	mpz_t g1; mpz_init(g1);
 
 	int R = Rmin;
-	int d = numlc + 1; int n = numlc;
+	int n = d;
 	int bb = 6;
 	int mm;
 	int64_t nn = 0;
@@ -274,8 +274,8 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, sizeof(M));
 	
-		// generate numlc random elements A*x + B
-		for (int i = 0; i < numlc; i++) {
+		// generate d - 2 random elements A*x + B
+		for (int i = 0; i < d - 2; i++) {
 			mpz_urandomm(Ai[i], state, maxA);
 			//mpz_mul_ui(Ai[i], Ai[i], 7);
 			//mpz_set_ui(Ai[i], 102987);
@@ -288,7 +288,7 @@ int main(int argc, char** argv)
 		// sieve side 0
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
-		slcsieve(numlc, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
+		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
 			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
@@ -351,7 +351,7 @@ int main(int argc, char** argv)
 		// sieve side 1
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
-		slcsieve(numlc, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
+		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
 			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
@@ -663,7 +663,7 @@ int main(int argc, char** argv)
 	mpz_clear(B); mpz_clear(A);
 	gmp_randclear(state);
 
-	for (int i = 0; i < numlc; i++) {
+	for (int i = 0; i < d - 2; i++) {
 		mpz_clear(Bi[i]);
 		mpz_clear(Ai[i]);
 	}
@@ -732,11 +732,11 @@ int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb)
 	return B;
 }
 
-void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
+void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
 	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
 	int mbb, int bb)
 {
-	int d = numlc + 1; int n = numlc;
+	int n = d;
 	int dn = d*n;
 	int dd = d*d;
 	int64_t L[25];
