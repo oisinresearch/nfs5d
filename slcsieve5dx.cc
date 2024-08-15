@@ -79,9 +79,26 @@ int main(int argc, char** argv)
 
 	//cout << (uint64_t)(MASK64) << " " << (uint64_t)(MASK64 >> 64) << endl;
 
-	if (argc != 16) {
+	if (argc != 17) {
 		cout << endl << "Usage: ./slcsieve inputpoly factorbasefile d Amax Bmax N "
-			"Bmin Bmax Rmin Rmax th0 th1 lpb cofmaxbits mbb" << endl << endl;
+			"Bmin Bmax Rmin Rmax th0 th1 lpb cofmaxbits mbb bb" << endl << endl;
+		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
+		cout << "    factorbasefile  factor base produced with makesievebase" << endl;
+		cout << "    d               sieving dimension, always 5 for the moment" << endl;
+		cout << "    Amax            upper bound for A in A*x + B ideal generator" << endl;
+		cout << "    Bmax            upper bound for B in A*x + B ideal generator" << endl;
+		cout << "    N               number of workunits (think \"special-q\")" << endl;
+		cout << "    Bmin            lower bound on sieving primes" << endl;
+		cout << "    Bmax            upper bound on sieving primes" << endl;
+		cout << "    Rmin            initial value of sieve radius" << endl;
+		cout << "    Rmax            final value of sieve radius" << endl;
+		cout << "    th0             sum(logp) threshold on side 0" << endl;
+		cout << "    th1             sum(logp) threshold on side 1" << endl;
+		cout << "    lpb             large prime bound for both sides (can be mpz_t)" << endl;
+		cout << "    cofmaxbits      should be 11" << endl;
+		cout << "    mbb             bits in lattice data limit (e.g. 29,30...)" << endl;
+		cout << "    bb              bits in lattice coefficient range [-bb/2,bb/2]^d" << endl;
+		cout << endl;
 		return 0;
 	}
 
@@ -221,6 +238,7 @@ int main(int argc, char** argv)
 	mpz_init_set_str(lpb, argv[13], 10);
 	int cofmaxbits = atoi(argv[14]);
 	int mbb = atoi(argv[15]);
+	int bb = atoi(argv[16]);
 	int64_t cofmax = 1 << cofmaxbits;
 
 	// main arrays
@@ -265,7 +283,6 @@ int main(int argc, char** argv)
 
 	int R = Rmin;
 	int n = d;
-	int bb = 6;
 	int mm;
 	int64_t nn = 0;
 	while (nn < N) {
