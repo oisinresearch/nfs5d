@@ -2,7 +2,7 @@
 #include <stdint.h>	// int64_t
 #include <iostream> // cout
 #include <iomanip> // setprecision
-#include "L2lu64.h"
+#include "L2lu128.h"
 #include <gmpxx.h>
 #include "intpoly.h"
 #include <cmath>	// sqrt
@@ -35,26 +35,28 @@ struct keyval {
 	uint8_t logp;
 };
 
-union int128_t {
-	__int128 int128;
-	int8_t bytes[16];
-};
+//union int128_t {
+//	__int128 int128;
+//	int8_t bytes[16];
+//};
 
 __int128 MASK64;
 
-bool int128_compare(const int128_t &v1, const int128_t &v2)
-{
-	return v2.int128 < v1.int128;
-}
+//bool int128_compare(const int128_t &v1, const int128_t &v2)
+//{
+//	return v2.int128 < v1.int128;
+//}
 
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
 void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
 	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
-	 int mbb, int bb);
+	 int mbb, int bb, int64_t Q0, int64_t R0);
+inline void matmul(int d, int128_t* C, int128_t* A, int128_t* B);
+void matadj(int d, int128_t* M, int128_t* C, int128_t* MC, int128_t* Madj);
 int64_t rel2A(int d, mpz_t* Ai, int64_t reli, int bb);
 int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb);
-int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
+int enumeratehd(int d, int n, int* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
 	int R, int nnmax, int mbb, int bb);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
@@ -79,7 +81,7 @@ int main(int argc, char** argv)
 
 	//cout << (uint64_t)(MASK64) << " " << (uint64_t)(MASK64 >> 64) << endl;
 
-	if (argc != 17) {
+	if (argc != 19) {
 		cout << endl << "Usage: ./slcsieve inputpoly factorbasefile d Amax Bmax N "
 			"Bmin Bmax Rmin Rmax th0 th1 lpb cofmaxbits mbb bb" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
@@ -98,6 +100,8 @@ int main(int argc, char** argv)
 		cout << "    cofmaxbits      should be 11" << endl;
 		cout << "    mbb             bits in lattice data limit (e.g. 29,30...)" << endl;
 		cout << "    bb              bits in lattice coefficient range [-bb/2,bb/2]^d" << endl;
+		cout << "    Q               special-Q to pair (can be up to 2^64)" << endl;
+		cout << "    R               root of sieving polynomial mod Q" << endl;
 		cout << endl;
 		return 0;
 	}
@@ -240,6 +244,8 @@ int main(int argc, char** argv)
 	int mbb = atoi(argv[15]);
 	int bb = atoi(argv[16]);
 	int64_t cofmax = 1 << cofmaxbits;
+	int64_t Q = strtoll(argv[17], NULL, 10);
+	int64_t RR = strtoll(argv[18], NULL, 10);
 
 	// main arrays
 	uint64_t Mlen = 1ul<<(mbb);  // 268435456
@@ -304,8 +310,9 @@ int main(int argc, char** argv)
 		// sieve side 0
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
+
 		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
-			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb);
+			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb, Q, RR);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		uint64_t total = 0;
@@ -368,7 +375,7 @@ int main(int argc, char** argv)
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
 		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
-			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb);
+			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb, Q, RR);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		total = 0;
@@ -750,45 +757,99 @@ int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb)
 
 void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
 	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
-	int mbb, int bb)
+	int mbb, int bb, int64_t Q0, int64_t R0)
 {
 	int n = d;
 	int dn = d*n;
 	int dd = d*d;
-	int64_t L[25];
 	int lastrow = (d-1)*d;
+	int128_t* L = new int128_t[dd];
+	int128_t* QLinv = new int128_t[dd];
+	int128_t* Lp = new int128_t[dd];
+	int128_t* L3 = new int128_t[dd];
+	int* L4 = new int[dd];
+	int* L5 = new int[dd];
+
+	// compute L
+	int128_t Q = static_cast<int128_t>(Q0);
+	int128_t R = static_cast<int128_t>(R0);
+	for (int k = 0; k < dd; k++) L[k] = 0;
+	for (int k = 0; k < d; k++) L[k*d+k] = 1;
+	for (int k = 0; k < d - 2; k++) {
+		// reduce Ak*x + Bk mod p
+		int128_t Amodp = static_cast<int128_t>(mpz_fdiv_ui(Ak[k], Q0));
+		int128_t Bmodp = static_cast<int128_t>(mpz_fdiv_ui(Bk[k], Q0));
+		int128_t Ri = (Amodp*R + Bmodp) % Q;
+		L[lastrow + k] = Ri;
+	}
+	// last basis vector gets x - R
+	L[lastrow + d - 2] = R;
+	L[lastrow + d - 1] = Q;
+
+	// reduce L using LLL
+	int128L2(L, d);
+
+	// compute QLinv = Q*L^-1 = det(L)*L^-1 = matadj(L)
+	int128_t* C = new int128_t[dd];
+	int128_t* LC = new int128_t[dd];
+	matadj(d, L, C, LC, QLinv);
+
+	int64_t* Amodp = new int64_t[d-2];
+	int64_t* Bmodp = new int64_t[d-2];
 
 	int i = 0;
 	while (sieve_p[i] < Bmin) i++;
-	int R = Rmin;
+	int Rcurrent = Rmin;
 	int64_t p = sieve_p[i];
 	uint8_t logp = log2f(p);
 	uint64_t mj = 0;
 	for (int j = 0; j < 512; j++, mj += (1<<(mbb-9))) m[j] = mj;
 	while (p < Bmax) {
 		int ni = sieve_n[i];
+		for (int k = 0; k < d - 2; k++) {
+			// reduce Ak*x + Bk mod p
+			Amodp[k] = mpz_fdiv_ui(Ak[k], p);
+			Bmodp[k] = mpz_fdiv_ui(Bk[k], p);
+		}
 		for (int j = 0; j < ni; j++) {
 			int r = sieve_r[i*degf+j];
 
 			// construct sieving lattice for this p
-			for (int k = 0; k < dd; k++) L[k] = 0;
-			for (int k = 0; k < d; k++) L[k*d+k] = 1;
+			for (int k = 0; k < dd; k++) Lp[k] = 0;
+			for (int k = 0; k < d; k++) Lp[k*d+k] = 1;
 			for (int k = 0; k < d - 2; k++) {
 				// reduce Ak*x + Bk mod p
-				int64_t Amodp = mpz_fdiv_ui(Ak[k], p);
-				int64_t Bmodp = mpz_fdiv_ui(Bk[k], p);
-				int64_t ri = (Amodp*r + Bmodp) % p;
-				L[lastrow + k] = ri;
+				int64_t ri = (Amodp[k]*r + Bmodp[k]) % p;
+				Lp[lastrow + k] = static_cast<int128_t>(ri);
 			}
 			// last basis vector gets x - r
-			L[lastrow + d - 2] = r;
-			L[lastrow + d - 1] = p;
+			Lp[lastrow + d - 2] = static_cast<int128_t>(r);
+			Lp[lastrow + d - 1] = static_cast<int128_t>(p);
 
-			// reduce L using LLL
-			int64L2(L, d, d);
+			// reduce Lp using LLL
+			int128L2(Lp, d);
+
+			// compute L3
+			matmul(d, L3, QLinv, Lp);
+			for (int k = 0; k < dd; k++) L4[k] = static_cast<int>(L3[k] / Q);
+
+			// computing sieving lattice L5 by extracting valid basis vectors from L4
+			n = 0;
+			for (int l = 0; l < d; l++) {
+				int64_t A = 0; int64_t B = 0;
+				for (int k = 0; k < d; k++) {
+					A += L4[k*d + l] * mpz_get_si(Ak[k]);
+					B += L4[k*d + l] * mpz_get_si(Bk[k]);
+					L5[k*d + n] = L4[k*d + l];
+				}
+				if (A != 0 && B != 0) {
+					for (int k = 0; k < d; k++) L5[k*d + n] = L4[k*d + l];
+					n++;
+				}
+			}				
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
-			int nn = enumerate5d(d, d, L, M, m, logp, p, R, 1000, mbb, bb);
+			int nn = enumeratehd(d, n, L5, M, m, logp, p, Rcurrent, 1000, mbb, bb);
 			to_string(nn);
 		}
 		
@@ -796,8 +857,51 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 		i++;
 		p = sieve_p[i];
 
-		R = (int)(Rmin + (Rmax - Rmin)*((double)p - Bmin)/((double)Bmax - Bmin));
+		Rcurrent = (int)(Rmin + (Rmax - Rmin)*((double)p - Bmin)/((double)Bmax - Bmin));
 	}
+
+	// clear memory
+	delete[] Bmodp; delete[] Amodp;
+	delete[] LC; delete[] C;
+	delete[] L5; delete[] L4; delete[] L3; delete[] Lp; delete[] QLinv; delete[] L;
+}
+
+inline void matmul(int d, int128_t* C, int128_t* A, int128_t* B)
+{
+    for (int i = 0; i < d; i++) {
+        for (int j = 0; j < d; j++) {
+            C[d*i + j] = 0;
+            for (int k = 0; k < d; k++) {
+                C[d*i + j] += A[d*i + k] * B[d*k + j];
+            }
+        }
+    }
+}
+
+void matadj(int d, int128_t* M, int128_t* C, int128_t* MC, int128_t* Madj)
+{
+	int dd = d*d;
+    for (int k = 0; k < dd; k++) C[k] = 0;
+	for (int k = 0; k < d; k++) C[k*d + k] = 1;
+    for (int k = 0; k < dd; k++) MC[k] = 0;
+    int i = 0;
+    int128_t ai;
+    while (true) {
+        i++;
+        matmul(d, MC, M, C);
+        if (i == d) {
+            ai = 0;
+			for (int k = 0; k < d; k++) ai += MC[k*d + k];
+			ai = -ai / d;
+            for (int k = 0; k < dd; k++) Madj[k] = -C[k];
+            break;
+        }
+        for (int k = 0; k < dd; k++) C[k] = MC[k];
+		ai = 0;
+		for (int k = 0; k < d; k++) ai += C[k*d + k];
+		ai = -ai / i;
+		for (int k = 0; k < d; k++) C[k*d + k] += ai;
+    }
 }
 
 void printvector(int d, uint64_t v, int bb)
@@ -820,7 +924,7 @@ void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 	}
 }
 
-int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
+int enumeratehd(int d, int n, int* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
 	int R, int nnmax, int mbb, int bb)
 {
 	int64_t hB = 1<<(bb-1);
@@ -843,7 +947,7 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 	int32_t* c = new int32_t[d]();
 
 	// Gram-Schmidt orthogonalization
-	int64_t* borig = L;
+	int* borig = L;
 	for (int i = 0; i < n; i++) {
 		for (int k = 0; k < d; k++) {
 			uu[k*n + k] = 1;

@@ -20,14 +20,14 @@ using std::setprecision;
 using std::setw;
 using std::flush;
 
-//float n = 0.51f;
-//float delta = 0.99f;
-//float nn = (n+0.5f) / 2.0f;
-//float dd = (delta+1.0f) / 2.0f;
-extern float n;
-extern float delta;
-extern float nn;
-extern float dd;
+float n = 0.51f;
+float delta = 0.99f;
+float nn = (n+0.5f) / 2.0f;
+float dd = (delta+1.0f) / 2.0f;
+//extern float n;
+//extern float delta;
+//extern float nn;
+//extern float dd;
 
 void int128L2(int128_t* borig, int d)
 {
