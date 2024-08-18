@@ -45,8 +45,8 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 	 int mbb, int bb, int64_t Q0, int64_t R0);
 inline void matmul(int d, int128_t* C, int128_t* A, int128_t* B);
 void matadj(int d, int128_t* M, int128_t* C, int128_t* MC, int128_t* Madj);
-int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t reli, int bb);
-int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t reli, int bb);
+int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t relid, int bb);
+int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t relid, int bb);
 int enumeratehd(int d, int n, int* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
 	int R, int nnmax, int mbb, int bb);
 void printvector(int d, uint64_t v, int hB);
@@ -358,7 +358,7 @@ int main(int argc, char** argv)
 						int64_t g = gcd(A64, B64);
 						A64 /= g; B64 /= g;
 						if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
-							//if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
 							rel.push_back(lastid);
 							R0++;
 						}
@@ -372,7 +372,7 @@ int main(int argc, char** argv)
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
 					if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
-						//if (R0 < 5) cout << A64 << "*x + " << B64 << endl;
+						if (R0 < 5) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(id);
 						R0++;
 					}
@@ -420,7 +420,7 @@ int main(int argc, char** argv)
 						int64_t g = gcd(A64, B64);
 						A64 /= g; B64 /= g;
 						if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
-							//if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
+							if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << lastid << endl;
 							rel.push_back(lastid);
 							R1++;
 						}
@@ -434,7 +434,7 @@ int main(int argc, char** argv)
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
 					if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
-						//if (R1 < 5) cout << A64 << "*x + " << B64 << endl;
+						if (R1 < 5) cout << A64 << "*x + " << B64 << endl;
 						rel.push_back(id);
 						R1++;
 					}
@@ -734,17 +734,18 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t reli, int bb)
+int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t relid, int bb)
 {
 	int64_t BB = 1<<bb;
 	int64_t hB = 1<<(bb-1);
 	mpz_t t; mpz_init_set_ui(t, 0);
 	// compute v = L*(vector from reli)
 	int* v = new int[d]();
+	int* u = new int[d]();
+	for (int i = 0; i < d; i++) u[i] = (relid >> (bb*i)) % BB - hB;
 	for (int j = 0; j < d; j++) {
-		int a = (reli >> (bb*j)) % BB - hB;
 		for (int i = 0; i < d; i++) {
-			v[j] += L[j*d + i] * a;
+			v[j] += L[j*d + i] * u[i];
 		}
 	}		
 	int64_t A = 0;
@@ -753,22 +754,24 @@ int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t reli, int bb)
 		A += mpz_get_si(t);
 	}
 	A += v[d-2];
+	delete[] u;
 	delete[] v;
 	mpz_clear(t);
 	return A;
 }
 
-int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t reli, int bb)
+int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t relid, int bb)
 {
 	int64_t BB = 1<<bb;
 	int64_t hB = 1<<(bb-1);
 	mpz_t t; mpz_init_set_ui(t, 0);
 	// compute v = L*(vector from reli)
 	int* v = new int[d]();
+	int* u = new int[d]();
+	for (int i = 0; i < d; i++) u[i] = (relid >> (bb*i)) % BB - hB;
 	for (int j = 0; j < d; j++) {
-		int a = (reli >> (bb*j)) % BB - hB;
 		for (int i = 0; i < d; i++) {
-			v[j] += L[j*d + i] * a;
+			v[j] += L[j*d + i] * u[i];
 		}
 	}		
 	int64_t B = 0;
@@ -777,6 +780,8 @@ int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t reli, int bb)
 		B += mpz_get_si(t);
 	}
 	B -= v[d-1];
+	delete[] u;
+	delete[] v;
 	mpz_clear(t);
 	return B;
 }
@@ -837,6 +842,9 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	uint8_t logp = log2f(p);
 	uint64_t mj = 0;
 	for (int j = 0; j < 512; j++, mj += (1<<(mbb-9))) m[j] = mj;
+	int64_t gap = (int64_t)(((double)Bmax - p) / 10.0);
+	int pc = 0;
+	int64_t nextmark = p + gap;
 	while (p < Bmax) {
 		int ni = sieve_n[i];
 		for (int k = 0; k < d - 2; k++) {
@@ -902,9 +910,15 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 		// advance to next p
 		i++;
 		p = sieve_p[i];
+		if (p > nextmark && pc < 90) {
+			pc += 10;
+			cout << "# " << pc << "\% of primes sieved..." << endl;
+			nextmark += gap;
+		}
 
 		Rcurrent = (int)(Rmin + (Rmax - Rmin)*((double)p - Bmin)/((double)Bmax - Bmin));
 	}
+	cout << "# 100\% of primes sieved." << endl;
 
 	// clear memory
 	delete[] Bmodq; delete[] Amodq; delete[] Bmodp; delete[] Amodp;
