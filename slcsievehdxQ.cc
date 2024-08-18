@@ -2,6 +2,7 @@
 #include <stdint.h>	// int64_t
 #include <iostream> // cout
 #include <iomanip> // setprecision
+#include "L2lu64.h"
 #include "L2lu128.h"
 #include <gmpxx.h>
 #include "intpoly.h"
@@ -35,17 +36,7 @@ struct keyval {
 	uint8_t logp;
 };
 
-//union int128_t {
-//	__int128 int128;
-//	int8_t bytes[16];
-//};
-
 __int128 MASK64;
-
-//bool int128_compare(const int128_t &v1, const int128_t &v2)
-//{
-//	return v2.int128 < v1.int128;
-//}
 
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
@@ -54,12 +45,13 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 	 int mbb, int bb, int64_t Q0, int64_t R0);
 inline void matmul(int d, int128_t* C, int128_t* A, int128_t* B);
 void matadj(int d, int128_t* M, int128_t* C, int128_t* MC, int128_t* Madj);
-int64_t rel2A(int d, mpz_t* Ai, int64_t reli, int bb);
-int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb);
+int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t reli, int bb);
+int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t reli, int bb);
 int enumeratehd(int d, int n, int* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
 	int R, int nnmax, int mbb, int bb);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
+inline int64_t modinv(int64_t x, int64_t m);
 inline int64_t gcd(int64_t a, int64_t b);
 inline __int128 gcd128(__int128 a, __int128 b);
 void GetlcmScalar(int B, mpz_t S, int* primes, int nump);
@@ -86,7 +78,7 @@ int main(int argc, char** argv)
 			"Bmin Bmax Rmin Rmax th0 th1 lpb cofmaxbits mbb bb" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
 		cout << "    factorbasefile  factor base produced with makesievebase" << endl;
-		cout << "    d               sieving dimension, always 5 for the moment" << endl;
+		cout << "    d               sieving dimension" << endl;
 		cout << "    Amax            upper bound for A in A*x + B ideal generator" << endl;
 		cout << "    Bmax            upper bound for B in A*x + B ideal generator" << endl;
 		cout << "    N               number of workunits (think \"special-q\")" << endl;
@@ -100,7 +92,7 @@ int main(int argc, char** argv)
 		cout << "    cofmaxbits      should be 11" << endl;
 		cout << "    mbb             bits in lattice data limit (e.g. 29,30...)" << endl;
 		cout << "    bb              bits in lattice coefficient range [-bb/2,bb/2]^d" << endl;
-		cout << "    Q               special-Q to pair (can be up to 2^64)" << endl;
+		cout << "    Q               special-Q to match (can be up to 2^64)" << endl;
 		cout << "    R               root of sieving polynomial mod Q" << endl;
 		cout << endl;
 		return 0;
@@ -244,7 +236,8 @@ int main(int argc, char** argv)
 	int mbb = atoi(argv[15]);
 	int bb = atoi(argv[16]);
 	int64_t cofmax = 1 << cofmaxbits;
-	int64_t Q = strtoll(argv[17], NULL, 10);
+	int64_t Q0 = strtoll(argv[17], NULL, 10);
+	int128_t Q = static_cast<int128_t>(Q0);
 	int64_t RR = strtoll(argv[18], NULL, 10);
 
 	// main arrays
@@ -278,6 +271,8 @@ int main(int argc, char** argv)
 		mpz_init_set_ui(Ai[i], 0);
 		mpz_init_set_ui(Bi[i], 0);
 	}
+	int dd = d*d;
+	int64_t* L = new int64_t[dd];
 
 	gmp_randstate_t state;
 	gmp_randinit_default(state);
@@ -307,12 +302,29 @@ int main(int argc, char** argv)
 			cout << "# " << str1 << "*x + " << str2 << endl;
 		}
 
+		int lastrow = (d-1)*d;
+		for (int i = 0; i < dd; i++) L[i] = 0;
+		for (int i = 0; i < d; i++) L[i*d+i] = 1;
+		for (int i = 0; i < d - 2; i++) {
+			// reduce Ak*x + Bk mod p
+			int128_t AmodQ = static_cast<int128_t>(mpz_fdiv_ui(Ai[i], Q0));
+			int128_t BmodQ = static_cast<int128_t>(mpz_fdiv_ui(Bi[i], Q0));
+			int128_t Ri = (AmodQ*RR + BmodQ) % Q;
+			L[lastrow + i] = static_cast<int64_t>(Ri);
+		}
+		// last basis vector gets x - R
+		L[lastrow + d - 2] = RR;
+		L[lastrow + d - 1] = Q0;
+
+		// reduce L using LLL
+		int64L2(L, d, d);
+
 		// sieve side 0
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
 
 		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
-			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb, Q, RR);
+			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb, Q0, RR);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		uint64_t total = 0;
@@ -341,8 +353,8 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th0) {
-						int64_t A64 = rel2A(d, Ai, lastid, bb);
-						int64_t B64 = rel2B(d, Bi, lastid, bb);
+						int64_t A64 = rel2A(d, Ai, L, lastid, bb);
+						int64_t B64 = rel2B(d, Bi, L, lastid, bb);
 						int64_t g = gcd(A64, B64);
 						A64 /= g; B64 /= g;
 						if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
@@ -355,8 +367,8 @@ int main(int argc, char** argv)
 					sumlogp = Mii.logp;
 				}
 				if (ii == mend-1 && sumlogp > th0) {
-					int64_t A64 = rel2A(d, Ai, id, bb);
-					int64_t B64 = rel2B(d, Bi, id, bb);
+					int64_t A64 = rel2A(d, Ai, L, id, bb);
+					int64_t B64 = rel2B(d, Bi, L, id, bb);
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
 					if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
@@ -375,7 +387,7 @@ int main(int argc, char** argv)
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
 		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
-			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb, Q, RR);
+			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb, Q0, RR);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		total = 0;
@@ -403,8 +415,8 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th1) {
-						int64_t A64 = rel2A(d, Ai, lastid, bb);
-						int64_t B64 = rel2B(d, Bi, lastid, bb);
+						int64_t A64 = rel2A(d, Ai, L, lastid, bb);
+						int64_t B64 = rel2B(d, Bi, L, lastid, bb);
 						int64_t g = gcd(A64, B64);
 						A64 /= g; B64 /= g;
 						if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
@@ -417,8 +429,8 @@ int main(int argc, char** argv)
 					sumlogp = Mii.logp;
 				}
 				if (ii == mend-1 && sumlogp > th1) {
-					int64_t A64 = rel2A(d, Ai, id, bb);
-					int64_t B64 = rel2B(d, Bi, id, bb);
+					int64_t A64 = rel2A(d, Ai, L, id, bb);
+					int64_t B64 = rel2B(d, Bi, L, id, bb);
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
 					if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
@@ -445,8 +457,8 @@ int main(int argc, char** argv)
 		{
 			if (i == rel.size() - 1) break;
 			if (rel[i] == rel[i+1] && rel[i] != 0) {
-				int64_t A64 = rel2A(d, Ai, rel[i], bb);
-				int64_t B64 = rel2B(d, Bi, rel[i], bb);
+				int64_t A64 = rel2A(d, Ai, L, rel[i], bb);
+				int64_t B64 = rel2B(d, Bi, L, rel[i], bb);
 				if (A64 != 0 && B64 != 0) {
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
@@ -459,15 +471,15 @@ int main(int argc, char** argv)
 	
 		// compute and factor resultants as much as possible.
 		int BASE = 16;
-		stack<mpz_t*> QN; stack<int> Q; int algarr[3]; mpz_t* N;
+		stack<mpz_t*> QN; stack<int> Qu; int algarr[3]; mpz_t* N;
 		start = clock();
 		R = 0;
 		if (verbose) cout << "Starting cofactorizaion..." << endl;
 		for (int i = 0; i <= (int)(rel.size()-1); i++) {
 			if (rel[i] == rel[i+1] && rel[i] != 0) {
 				// construct A*x + B from small linear combinations
-				int64_t A64 = rel2A(d, Ai, rel[i], bb);
-				int64_t B64 = rel2B(d, Bi, rel[i], bb);
+				int64_t A64 = rel2A(d, Ai, L, rel[i], bb);
+				int64_t B64 = rel2B(d, Bi, L, rel[i], bb);
 				mpz_set_si(A, A64); mpz_set_si(B, B64);
 				
 				// remove content of A*x + B
@@ -516,18 +528,18 @@ int main(int argc, char** argv)
 				if (mpz_cmp_ui(N0, 1) == 0) { cofactor = false; }
 				str += (cofactor ? "," : "");
 				// cofactorization on side 0
-				int ii = 0; while (!Q.empty()) Q.pop(); while (!QN.empty()) QN.pop();
+				int ii = 0; while (!Qu.empty()) Qu.pop(); while (!QN.empty()) QN.pop();
 				if (cofactor) {
 					if (mpz_probab_prime_p(N0, 30) == 0) {  // cofactor definitely composite
 						
-						QN.push(&N0); Q.push(2); Q.push(1); Q.push(0); Q.push(3);
+						QN.push(&N0); Qu.push(2); Qu.push(1); Qu.push(0); Qu.push(3);
 						while (!QN.empty()) {
 							mpz_t* N = QN.top(); QN.pop();
-							int l = Q.top(); Q.pop();
+							int l = Qu.top(); Qu.pop();
 							int j = 0;
 							bool factored = false;
 							while (!factored) {
-								int alg = Q.top(); Q.pop(); j++;
+								int alg = Qu.top(); Qu.pop(); j++;
 								switch (alg) {
 									case 0: factored = PollardPm1(*N, S, factor);
 											break;	
@@ -547,8 +559,8 @@ int main(int argc, char** argv)
 									}
 									// save remaining algs to array
 									int lnext = l - j; int lt = lnext;
-									while (lt--) { algarr[lt] = Q.top(); Q.pop(); }
-									lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+									while (lt--) { algarr[lt] = Qu.top(); Qu.pop(); }
+									lt = lnext; if (lt) { while (lt--) Qu.push(algarr[lnext-1-lt]); Qu.push(lnext); }
 									if (mpz_probab_prime_p(p1, 30)) {
 										if (mpz_cmpabs(p1, lpb) > 0) { isrel = false; break; }
 										else { mpz_get_str(str2, BASE, p1); str += str2; str += ","; }
@@ -557,7 +569,7 @@ int main(int argc, char** argv)
 										if (!lnext) { isrel = false; break; }
 										mpz_set(pi[ii], p1);
 										QN.push(&pi[ii++]);
-										lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+										lt = lnext; if (lt) { while (lt--) Qu.push(algarr[lnext-1-lt]); Qu.push(lnext); }
 									}
 									if (mpz_probab_prime_p(p2, 30)) {
 										if (mpz_cmpabs(p2, lpb) > 0) { isrel = false; break; }
@@ -567,7 +579,7 @@ int main(int argc, char** argv)
 										if (!lnext) { isrel = false; break; }
 										mpz_set(pi[ii], p2);
 										QN.push(&pi[ii++]);
-										lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+										lt = lnext; if (lt) { while (lt--) Qu.push(algarr[lnext-1-lt]); Qu.push(lnext); }
 									}
 								}
 							}
@@ -609,18 +621,18 @@ int main(int argc, char** argv)
 					if (mpz_cmp_ui(N1, 1) == 0) { cofactor = false; }
 					str += (cofactor ? "," : "");
 					// cofactorization on side 1
-					ii = 0; while (!Q.empty()) Q.pop(); while (!QN.empty()) QN.pop();
+					ii = 0; while (!Qu.empty()) Qu.pop(); while (!QN.empty()) QN.pop();
 					if (cofactor) {
 						if (mpz_probab_prime_p(N1, 30) == 0) {  // cofactor definitely composite
 							
-							QN.push(&N1); Q.push(2); Q.push(1); Q.push(0); Q.push(3);
+							QN.push(&N1); Qu.push(2); Qu.push(1); Qu.push(0); Qu.push(3);
 							while (!QN.empty()) {
 								mpz_t* N = QN.top(); QN.pop();
-								int l = Q.top(); Q.pop();
+								int l = Qu.top(); Qu.pop();
 								int j = 0;
 								bool factored = false;
 								while (!factored) {
-									int alg = Q.top(); Q.pop(); j++;
+									int alg = Qu.top(); Qu.pop(); j++;
 									switch (alg) {
 										case 0: factored = PollardPm1(*N, S, factor);
 												break;	
@@ -640,8 +652,8 @@ int main(int argc, char** argv)
 										}
 										// save remaining algs to array
 										int lnext = l - j; int lt = lnext;
-										while (lt--) { algarr[lt] = Q.top(); Q.pop(); }
-										lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+										while (lt--) { algarr[lt] = Qu.top(); Qu.pop(); }
+										lt = lnext; if (lt) { while (lt--) Qu.push(algarr[lnext-1-lt]); Qu.push(lnext); }
 										if (mpz_probab_prime_p(p1, 30)) {
 											if (mpz_cmpabs(p1, lpb) > 0) { isrel = false; break; }
 											else { mpz_get_str(str2, BASE, p1); str += str2; str += ","; }
@@ -650,7 +662,7 @@ int main(int argc, char** argv)
 											if (!lnext) { isrel = false; break; }
 											mpz_set(pi[ii], p1);
 											QN.push(&pi[ii++]);
-											lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+											lt = lnext; if (lt) { while (lt--) Qu.push(algarr[lnext-1-lt]); Qu.push(lnext); }
 										}
 										if (mpz_probab_prime_p(p2, 30)) {
 											if (mpz_cmpabs(p2, lpb) > 0) { isrel = false; break; }
@@ -660,7 +672,7 @@ int main(int argc, char** argv)
 											if (!lnext) { isrel = false; break; }
 											mpz_set(pi[ii], p2);
 											QN.push(&pi[ii++]);
-											lt = lnext; if (lt) { while (lt--) Q.push(algarr[lnext-1-lt]); Q.push(lnext); }
+											lt = lnext; if (lt) { while (lt--) Qu.push(algarr[lnext-1-lt]); Qu.push(lnext); }
 										}
 									}
 								}
@@ -686,6 +698,7 @@ int main(int argc, char** argv)
 	mpz_clear(B); mpz_clear(A);
 	gmp_randclear(state);
 
+	delete[] L;
 	for (int i = 0; i < d - 2; i++) {
 		mpz_clear(Bi[i]);
 		mpz_clear(Ai[i]);
@@ -721,36 +734,49 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-int64_t rel2A(int d, mpz_t* Ai, int64_t reli, int bb)
+int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t reli, int bb)
 {
 	int64_t BB = 1<<bb;
 	int64_t hB = 1<<(bb-1);
 	mpz_t t; mpz_init_set_ui(t, 0);
-	int64_t A = 0;
-	for (int j = 0; j < d-2; j++) {
+	// compute v = L*(vector from reli)
+	int* v = new int[d]();
+	for (int j = 0; j < d; j++) {
 		int a = (reli >> (bb*j)) % BB - hB;
-		mpz_mul_si(t, Ai[j], a);
+		for (int i = 0; i < d; i++) {
+			v[j] += L[j*d + i] * a;
+		}
+	}		
+	int64_t A = 0;
+	for (int j = 0; j < d-2; j++) {		
+		mpz_mul_si(t, Ai[j], v[j]);
 		A += mpz_get_si(t);
 	}
-	int a = (reli >> (bb*(d-2))) % BB - hB;
-	A += a;
+	A += v[d-2];
+	delete[] v;
 	mpz_clear(t);
 	return A;
 }
 
-int64_t rel2B(int d, mpz_t* Bi, int64_t reli, int bb)
+int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t reli, int bb)
 {
 	int64_t BB = 1<<bb;
 	int64_t hB = 1<<(bb-1);
 	mpz_t t; mpz_init_set_ui(t, 0);
+	// compute v = L*(vector from reli)
+	int* v = new int[d]();
+	for (int j = 0; j < d; j++) {
+		int a = (reli >> (bb*j)) % BB - hB;
+		for (int i = 0; i < d; i++) {
+			v[j] += L[j*d + i] * a;
+		}
+	}		
 	int64_t B = 0;
 	for (int j = 0; j < d-2; j++) {
-		int b = (reli >> (bb*j)) % BB - hB;
-		mpz_mul_si(t, Bi[j], b);
+		mpz_mul_si(t, Bi[j], v[j]);
 		B += mpz_get_si(t);
 	}
-	int b = (reli >> (bb*(d-1))) % BB - hB;
-	B -= b;
+	B -= v[d-1];
 	mpz_clear(t);
 	return B;
 }
@@ -765,7 +791,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	int lastrow = (d-1)*d;
 	int128_t* L = new int128_t[dd];
 	int128_t* QLinv = new int128_t[dd];
-	int128_t* Lp = new int128_t[dd];
+	int128_t* L2 = new int128_t[dd];
 	int128_t* L3 = new int128_t[dd];
 	int* L4 = new int[dd];
 	int* L5 = new int[dd];
@@ -777,9 +803,9 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	for (int k = 0; k < d; k++) L[k*d+k] = 1;
 	for (int k = 0; k < d - 2; k++) {
 		// reduce Ak*x + Bk mod p
-		int128_t Amodp = static_cast<int128_t>(mpz_fdiv_ui(Ak[k], Q0));
-		int128_t Bmodp = static_cast<int128_t>(mpz_fdiv_ui(Bk[k], Q0));
-		int128_t Ri = (Amodp*R + Bmodp) % Q;
+		int128_t AmodQ = static_cast<int128_t>(mpz_fdiv_ui(Ak[k], Q0));
+		int128_t BmodQ = static_cast<int128_t>(mpz_fdiv_ui(Bk[k], Q0));
+		int128_t Ri = (AmodQ*R + BmodQ) % Q;
 		L[lastrow + k] = Ri;
 	}
 	// last basis vector gets x - R
@@ -794,8 +820,15 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	int128_t* LC = new int128_t[dd];
 	matadj(d, L, C, LC, QLinv);
 
-	int64_t* Amodp = new int64_t[d-2];
-	int64_t* Bmodp = new int64_t[d-2];
+	int128_t* Amodp = new int128_t[d-2];
+	int128_t* Bmodp = new int128_t[d-2];
+	int128_t* Amodq = new int128_t[d-2];
+	int128_t* Bmodq = new int128_t[d-2];
+	for (int k = 0; k < d - 2; k++) {
+		// reduce Ak*x + Bk mod p
+		Amodq[k] = static_cast<int128_t>(mpz_fdiv_ui(Ak[k], Q0));
+		Bmodq[k] = static_cast<int128_t>(mpz_fdiv_ui(Bk[k], Q0));
+	}
 
 	int i = 0;
 	while (sieve_p[i] < Bmin) i++;
@@ -808,40 +841,53 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 		int ni = sieve_n[i];
 		for (int k = 0; k < d - 2; k++) {
 			// reduce Ak*x + Bk mod p
-			Amodp[k] = mpz_fdiv_ui(Ak[k], p);
-			Bmodp[k] = mpz_fdiv_ui(Bk[k], p);
+			Amodp[k] = static_cast<int128_t>(mpz_fdiv_ui(Ak[k], p));
+			Bmodp[k] = static_cast<int128_t>(mpz_fdiv_ui(Bk[k], p));
 		}
+		int128_t qinvmodp = modinv(Q0, p);
+		int128_t pinvmodq = modinv(p, Q0);
+		int128_t P = static_cast<int128_t>(p);
+		int128_t PQ = P * Q;
 		for (int j = 0; j < ni; j++) {
 			int r = sieve_r[i*degf+j];
+			int128_t r1 = static_cast<int128_t>(r);
 
 			// construct sieving lattice for this p
-			for (int k = 0; k < dd; k++) Lp[k] = 0;
-			for (int k = 0; k < d; k++) Lp[k*d+k] = 1;
+			for (int k = 0; k < dd; k++) L2[k] = 0;
+			for (int k = 0; k < d; k++) L2[k*d+k] = 1;
 			for (int k = 0; k < d - 2; k++) {
 				// reduce Ak*x + Bk mod p
-				int64_t ri = (Amodp[k]*r + Bmodp[k]) % p;
-				Lp[lastrow + k] = static_cast<int128_t>(ri);
-			}
-			// last basis vector gets x - r
-			Lp[lastrow + d - 2] = static_cast<int128_t>(r);
-			Lp[lastrow + d - 1] = static_cast<int128_t>(p);
+				int128_t ri = static_cast<int128_t>((Amodp[k]*r + Bmodp[k]) % p);
+				int128_t Ri = (Amodq[k]*R + Bmodq[k]) % Q;
+				// compute Rri with CRT
 
-			// reduce Lp using LLL
-			int128L2(Lp, d);
+				int128_t Rri = Q * ((ri * qinvmodp) % P) + P * ((Ri * pinvmodq) % Q);
+				if (Rri > PQ) Rri -= PQ;
+				L2[lastrow + k] = Rri;
+			}
+			// compute Rr with CRT
+			int128_t Rr = Q * ((r1 * qinvmodp) % P) + P * ((R * pinvmodq) % Q);
+			if (Rr > PQ) Rr -= PQ;
+			L2[lastrow + d - 2] = Rr;
+			L2[lastrow + d - 1] = Q * P;
+
+			// reduce L2 using LLL
+			int128L2(L2, d);
 
 			// compute L3
-			matmul(d, L3, QLinv, Lp);
+			matmul(d, L3, QLinv, L2);
 			for (int k = 0; k < dd; k++) L4[k] = static_cast<int>(L3[k] / Q);
 
 			// computing sieving lattice L5 by extracting valid basis vectors from L4
 			n = 0;
 			for (int l = 0; l < d; l++) {
 				int64_t A = 0; int64_t B = 0;
-				for (int k = 0; k < d; k++) {
+				for (int k = 0; k < d-2; k++) {
 					A += L4[k*d + l] * mpz_get_si(Ak[k]);
 					B += L4[k*d + l] * mpz_get_si(Bk[k]);
-					L5[k*d + n] = L4[k*d + l];
 				}
+				A += L4[(d-2)*d + l];
+				B -= L4[(d-1)*d + l];
 				if (A != 0 && B != 0) {
 					for (int k = 0; k < d; k++) L5[k*d + n] = L4[k*d + l];
 					n++;
@@ -861,9 +907,9 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	}
 
 	// clear memory
-	delete[] Bmodp; delete[] Amodp;
+	delete[] Bmodq; delete[] Amodq; delete[] Bmodp; delete[] Amodp;
 	delete[] LC; delete[] C;
-	delete[] L5; delete[] L4; delete[] L3; delete[] Lp; delete[] QLinv; delete[] L;
+	delete[] L5; delete[] L4; delete[] L3; delete[] L2; delete[] QLinv; delete[] L;
 }
 
 inline void matmul(int d, int128_t* C, int128_t* A, int128_t* B)
@@ -1135,6 +1181,19 @@ inline bool bucket_sorter(keyval const& kv1, keyval const& kv2)
 	return kv2.id < kv1.id;
 }
 
+inline int64_t modinv(int64_t x, int64_t m)
+{
+    int64_t m0 = m, t, q;
+    int64_t y0 = 0, y = 1;
+    if (m == 1) return 1;
+    while (x > 1) {
+        q = x / m;
+        t = m, m = x % m, x = t;
+        t = y0, y0 = y - q * y0, y = t;
+    }
+    if (y < 0) y += m0;
+    return y;
+}
 
 inline int max(int u, int v)
 {
