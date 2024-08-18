@@ -32,13 +32,13 @@ extern float dd;
 void int128L2(int128_t* borig, int d)
 {
 	int d2 = d*d;
-	int256_t* b = new int256_t[d2];
-	int256_t* G = new int256_t[d2](); // subtle bug unless G initialized to zero
+	int128_t* b = new int128_t[d2];
+	int128_t* G = new int128_t[d2](); // subtle bug unless G initialized to zero
 	float128* rr = new float128[d2];
 	float128* uu = new float128[d2];
 
 	// copy into b
-	for (int i = 0; i < d2; i++) b[i] = borig[i].convert_to<int256_t>();
+	for (int i = 0; i < d2; i++) b[i] = borig[i].convert_to<int128_t>();
 
 	// compute Gram matrix exactly
 	for (int j = 0; j < d; j++) {
@@ -72,8 +72,8 @@ void int128L2(int128_t* borig, int d)
 		}
 		if (max > nn) {
 			for (int j = k-1; j >= 0; j--) {
-				int256_t X = floor(uu[j*d+k] + 0.5).convert_to<int256_t>();
-				//int256_t X = static_cast<int256_t>(floorl(uu[j*d+k] + 0.5f));
+				int128_t X = floor(uu[j*d+k] + 0.5).convert_to<int128_t>();
+				//int128_t X = static_cast<int128_t>(floorl(uu[j*d+k] + 0.5f));
                 float128 Xf = X.convert_to<float128>();
 				for (int i = 0; i < d; i++)
 					b[i*d+k] -= X * b[i*d+j];
@@ -98,7 +98,7 @@ void int128L2(int128_t* borig, int d)
 		}
 		else {
 			for (int i = 0; i < d; i++) {
-				int256_t t = b[i*d+k-1];
+				int128_t t = b[i*d+k-1];
 				b[i*d+k-1] = b[i*d+k];
 				b[i*d+k] = t;
 			}
