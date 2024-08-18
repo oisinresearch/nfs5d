@@ -974,9 +974,6 @@ int enumeratehd(int d, int n, int* L, keyval* M, uint64_t* m, uint8_t logp, int6
 	int R, int nnmax, int mbb, int bb)
 {
 	int64_t hB = 1<<(bb-1);
-	int bb2 = bb*2;
-	int bb3 = bb*3;
-	int bb4 = bb*4;
 	int mmax = (1<<mbb)/512;
 
 	int dn = d*n;
@@ -1067,8 +1064,8 @@ int enumeratehd(int d, int n, int* L, keyval* M, uint64_t* m, uint8_t logp, int6
 					}
 					// save vector
 					if (keep && !iszero) {
-						uint64_t id = c[0]+hB + ((c[1]+hB)<<bb) + ((c[2]+hB)<<bb2)
-							+ ((c[3]+hB)<<bb3) + ((c[4]+hB)<<bb4);
+						uint64_t id = 0;
+						for (int l = 0; l < d; l++) id += (c[l] + hB) << (l * bb);
 						uint64_t mi = id % 509;	// number of buckets
 						mi = mi*id % 509;
 						mi = mi*id % 509;
