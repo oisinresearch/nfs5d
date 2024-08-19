@@ -837,6 +837,8 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 
 	int i = 0;
 	while (sieve_p[i] < Bmin) i++;
+	int imin = i;
+	int64_t nntotal = 0;
 	int Rcurrent = Rmin;
 	int64_t p = sieve_p[i];
 	uint8_t logp = log2f(p);
@@ -904,7 +906,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
 			int nn = enumeratehd(d, n, L5, M, m, logp, p, Rcurrent, 1000, mbb, bb);
-			to_string(nn);
+			nntotal += nn;
 		}
 		
 		// advance to next p
@@ -919,6 +921,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 		Rcurrent = (int)(Rmin + (Rmax - Rmin)*((double)p - Bmin)/((double)Bmax - Bmin));
 	}
 	cout << "# 100\% of primes sieved." << endl;
+	cout << "# Average of " << (int)((double)nntotal/(i-imin)) << " lattice points per prime." << endl;
 
 	// clear memory
 	delete[] Bmodq; delete[] Amodq; delete[] Bmodp; delete[] Amodp;
