@@ -1169,6 +1169,8 @@ int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 						uint64_t mi = id % 509;	// number of buckets
 						mi = mi*id % 509;
 						mi = mi*id % 509;
+						if (id == 612750195)
+							cout << to_string(id);
 						M[m[mi]] = (keyval){ id, logp };
 						m[mi]++; // we are relying on the TLB
 						int64_t mstart = mi*(1ul<<(mbb-9));
