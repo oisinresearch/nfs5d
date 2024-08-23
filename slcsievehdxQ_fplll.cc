@@ -48,8 +48,8 @@ void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B);
 void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q);
 void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC, ZZ_mat<mpz_t> &Madj);
 void negmat(int d, ZZ_mat<mpz_t> &A);
-int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t relid, int bb);
-int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t relid, int bb);
+int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb);
+int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb);
 int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
 	int R, int nnmax, int mbb, int bb);
 void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w);
@@ -241,8 +241,9 @@ int main(int argc, char** argv)
 	int bb = atoi(argv[16]);
 	int64_t cofmax = 1 << cofmaxbits;
 	int64_t Q0 = strtoll(argv[17], NULL, 10);
-	__int128 Q = static_cast<__int128>(Q0);
 	int64_t RR = strtoll(argv[18], NULL, 10);
+	__int128 Q = static_cast<__int128>(Q0);
+	__int128 R = static_cast<__int128>(RR);
 
 	// main arrays
 	uint64_t Mlen = 1ul << mbb;  // 268435456
@@ -269,11 +270,11 @@ int main(int argc, char** argv)
 	char* str2 = (char*)malloc(20*sizeof(char));
 
 	// construct array to hold d - 2 elements of Z[x]
-	mpz_t* Ai = new mpz_t[d - 2];
-	mpz_t* Bi = new mpz_t[d - 2];
-	for (int i = 0; i < d - 2; i++) {
-		mpz_init_set_ui(Ai[i], 0);
-		mpz_init_set_ui(Bi[i], 0);
+	mpz_t* Ak = new mpz_t[d - 2];
+	mpz_t* Bk = new mpz_t[d - 2];
+	for (int k = 0; k < d - 2; k++) {
+		mpz_init_set_ui(Ak[k], 0);
+		mpz_init_set_ui(Bk[k], 0);
 	}
 	int dd = d*d;
 	int64_t* L = new int64_t[dd];
@@ -286,7 +287,6 @@ int main(int argc, char** argv)
 	mpz_t B; mpz_init(B);
 	mpz_t g1; mpz_init(g1);
 
-	int R = Rmin;
 	int n = d;
 	int64_t nn = 0;
 	while (nn < N) {
@@ -296,38 +296,52 @@ int main(int argc, char** argv)
 		memset(M, 0, sizeof(M));
 	
 		// generate d - 2 random elements A*x + B
-		for (int i = 0; i < d - 2; i++) {
-			mpz_urandomm(Ai[i], state, maxA);
-			//mpz_mul_ui(Ai[i], Ai[i], 7);
-			//mpz_set_ui(Ai[i], 102987);
-			mpz_urandomm(Bi[i], state, maxB);
-			mpz_get_str(str1, 10, Ai[i]);
-			mpz_get_str(str2, 10, Bi[i]);
+		for (int k = 0; k < d - 2; k++) {
+			mpz_urandomm(Ak[k], state, maxA);
+			mpz_urandomm(Bk[k], state, maxB);
+			mpz_get_str(str1, 10, Ak[k]);
+			mpz_get_str(str2, 10, Bk[k]);
 			cout << "# " << str1 << "*x + " << str2 << endl;
 		}
 
-		int lastrow = (d-1)*d;
-		for (int i = 0; i < dd; i++) L[i] = 0;
-		for (int i = 0; i < d; i++) L[i*d+i] = 1;
-		for (int i = 0; i < d - 2; i++) {
-			// reduce Ak*x + Bk mod p
-			__int128 AmodQ = static_cast<__int128>(mpz_fdiv_ui(Ai[i], Q0));
-			__int128 BmodQ = static_cast<__int128>(mpz_fdiv_ui(Bi[i], Q0));
-			__int128 Ri = (AmodQ*RR + BmodQ) % Q;
-			L[lastrow + i] = static_cast<int64_t>(Ri);
+		// compute L1
+		ZZ_mat<mpz_t> L1;
+		L1.resize(d, d);
+		for (int k = 0; k < d; k++) {
+			for (int l = 0; l < d; l++) {
+				if (l == d - 1 && k < d-2) {
+					// reduce Ak*x + Bk mod Q0
+					__int128 AmodQ = static_cast<__int128>(mpz_fdiv_ui(Ak[k], Q0));
+					__int128 BmodQ = static_cast<__int128>(mpz_fdiv_ui(Bk[k], Q0));
+					__int128 Ri = (AmodQ*R + BmodQ) % Q;
+					L1[k][l] = Ri;
+				}
+				else if (k == l) {
+					L1[k][l] = 1;
+				}
+				else {
+					L1[k][l] = 0;
+				}
+			}
 		}
 		// last basis vector gets x - R
-		L[lastrow + d - 2] = RR;
-		L[lastrow + d - 1] = Q0;
+		L1[d-2][d-1] = RR;
+		L1[d-1][d-1] = Q0;
 
 		// reduce L using LLL
-		int64L2(L, d, d);
+		lll_reduction(L1, LLL_DEF_DELTA, LLL_DEF_ETA, LM_HEURISTIC, FT_DEFAULT,
+			0, LLL_DEFAULT);
+
+		// convert column-major L1 to flattened row-major L
+		for (int k = 0; k < d; k++)
+			for (int l = 0; l < d; l++)
+				L[k*d + l] = L1(l, k).get_si();
 
 		// sieve side 0
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
 
-		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Rmin, Rmax,
 			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb, Q0, RR);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
@@ -357,8 +371,8 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th0) {
-						int64_t A64 = rel2A(d, Ai, L, lastid, bb);
-						int64_t B64 = rel2B(d, Bi, L, lastid, bb);
+						int64_t A64 = rel2A(d, Ak, L, lastid, bb);
+						int64_t B64 = rel2B(d, Bk, L, lastid, bb);
 						if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
 							int64_t g = gcd(A64, B64);
 							A64 /= g; B64 /= g;
@@ -371,8 +385,8 @@ int main(int argc, char** argv)
 					sumlogp = Mii.logp;
 				}
 				if (ii == mend-1 && sumlogp > th0) {
-					int64_t A64 = rel2A(d, Ai, L, id, bb);
-					int64_t B64 = rel2B(d, Bi, L, id, bb);
+					int64_t A64 = rel2A(d, Ak, L, id, bb);
+					int64_t B64 = rel2B(d, Bk, L, id, bb);
 					if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
 						int64_t g = gcd(A64, B64);
 						A64 /= g; B64 /= g;
@@ -390,7 +404,7 @@ int main(int argc, char** argv)
 		// sieve side 1
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
-		slcsieve(d, Ai, Bi, Bmin, Bmax, Rmin, Rmax,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Rmin, Rmax,
 			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb, Q0, RR);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
@@ -419,8 +433,8 @@ int main(int argc, char** argv)
 				}
 				else {
 					if (sumlogp > th1) {
-						int64_t A64 = rel2A(d, Ai, L, lastid, bb);
-						int64_t B64 = rel2B(d, Bi, L, lastid, bb);
+						int64_t A64 = rel2A(d, Ak, L, lastid, bb);
+						int64_t B64 = rel2B(d, Bk, L, lastid, bb);
 						if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
 							int64_t g = gcd(A64, B64);
 							A64 /= g; B64 /= g;
@@ -433,8 +447,8 @@ int main(int argc, char** argv)
 					sumlogp = Mii.logp;
 				}
 				if (ii == mend-1 && sumlogp > th1) {
-					int64_t A64 = rel2A(d, Ai, L, id, bb);
-					int64_t B64 = rel2B(d, Bi, L, id, bb);
+					int64_t A64 = rel2A(d, Ak, L, id, bb);
+					int64_t B64 = rel2B(d, Bk, L, id, bb);
 					if (A64 != 0 && B64 != 0 && abs(A64) != 1) {
 						int64_t g = gcd(A64, B64);
 						A64 /= g; B64 /= g;
@@ -456,34 +470,34 @@ int main(int argc, char** argv)
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		
 		// print list of potential relations
-		int R = 0;
+		int T = 0;
 		for (int i = 0; i < rel.size(); i++)
 		{
 			if (i == rel.size() - 1) break;
 			if (rel[i] == rel[i+1] && rel[i] != 0) {
-				int64_t A64 = rel2A(d, Ai, L, rel[i], bb);
-				int64_t B64 = rel2B(d, Bi, L, rel[i], bb);
+				int64_t A64 = rel2A(d, Ak, L, rel[i], bb);
+				int64_t B64 = rel2B(d, Bk, L, rel[i], bb);
 				if (A64 != 0 && B64 != 0) {
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
-					if (R < 10) cout << A64 << "*x + " << B64 << endl;
-					R++;
+					if (T < 10) cout << A64 << "*x + " << B64 << endl;
+					T++;
 				}
 			}
 		}
-		cout << "# " << R << " potential relations found." << endl << flush;
+		cout << "# " << T << " potential relations found." << endl << flush;
 	
 		// compute and factor resultants as much as possible.
 		int BASE = 16;
 		stack<mpz_t*> QN; stack<int> Qu; int algarr[3]; mpz_t* N;
 		start = clock();
-		R = 0;
+		T = 0;
 		if (verbose) cout << "Starting cofactorizaion..." << endl;
 		for (int i = 0; i <= (int)(rel.size()-1); i++) {
 			if (rel[i] == rel[i+1] && rel[i] != 0) {
 				// construct A*x + B from small linear combinations
-				int64_t A64 = rel2A(d, Ai, L, rel[i], bb);
-				int64_t B64 = rel2B(d, Bi, L, rel[i], bb);
+				int64_t A64 = rel2A(d, Ak, L, rel[i], bb);
+				int64_t B64 = rel2B(d, Bk, L, rel[i], bb);
 				mpz_set_si(A, A64); mpz_set_si(B, B64);
 				
 				// remove content of A*x + B
@@ -689,13 +703,13 @@ int main(int argc, char** argv)
 						}
 					}
 
-					if (isrel) { cout << str << endl; R++; }
+					if (isrel) { cout << str << endl; T++; }
 				}
 			}
 		}
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Cofactorization took " << timetaken << "s" << endl;
-		cout << "# " << R << " actual relations found." << endl;
+		cout << "# " << T << " actual relations found." << endl;
 	}
 
 	mpz_clear(g1);
@@ -704,10 +718,10 @@ int main(int argc, char** argv)
 
 	delete[] L;
 	for (int i = 0; i < d - 2; i++) {
-		mpz_clear(Bi[i]);
-		mpz_clear(Ai[i]);
+		mpz_clear(Bk[i]);
+		mpz_clear(Ak[i]);
 	}
-	delete[] Ai; delete[] Bi;
+	delete[] Ak; delete[] Bk;
 
 	free(str1);
 	free(str2);
@@ -738,7 +752,7 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t relid, int bb)
+int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb)
 {
 	int64_t BB = 1<<bb;
 	int64_t hB = 1<<(bb-1);
@@ -754,7 +768,7 @@ int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t relid, int bb)
 	}		
 	int64_t A = 0;
 	for (int j = 0; j < d-2; j++) {		
-		mpz_mul_si(t, Ai[j], v[j]);
+		mpz_mul_si(t, Ak[j], v[j]);
 		A += mpz_get_si(t);
 	}
 	A += v[d-2];
@@ -764,7 +778,7 @@ int64_t rel2A(int d, mpz_t* Ai, int64_t* L, int64_t relid, int bb)
 	return A;
 }
 
-int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t relid, int bb)
+int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
 {
 	int64_t BB = 1<<bb;
 	int64_t hB = 1<<(bb-1);
@@ -780,7 +794,7 @@ int64_t rel2B(int d, mpz_t* Bi, int64_t* L, int64_t relid, int bb)
 	}		
 	int64_t B = 0;
 	for (int j = 0; j < d-2; j++) {
-		mpz_mul_si(t, Bi[j], v[j]);
+		mpz_mul_si(t, Bk[j], v[j]);
 		B += mpz_get_si(t);
 	}
 	B -= v[d-1];
@@ -821,7 +835,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	for (int k = 0; k < d; k++) {
 		for (int l = 0; l < d; l++) {
 			if (l == d - 1 && k < d-2) {
-				// reduce Ak*x + Bk mod p
+				// reduce Ak*x + Bk mod Q0
 				__int128 AmodQ = static_cast<__int128>(mpz_fdiv_ui(Ak[k], Q0));
 				__int128 BmodQ = static_cast<__int128>(mpz_fdiv_ui(Bk[k], Q0));
 				__int128 Ri = (AmodQ*R + BmodQ) % Q;
@@ -835,12 +849,13 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 			}
 		}
 	}
-	// last basis vector gets x - r
+	// last basis vector gets x - R
 	L[d-2][d-1] = R;
 	L[d-1][d-1] = Q;
 
 	// reduce L using LLL
-	lll_reduction(L, LLL_DEF_DELTA, LLL_DEF_ETA, LM_FAST, FT_DOUBLE, 0, LLL_DEFAULT);
+	lll_reduction(L, LLL_DEF_DELTA, LLL_DEF_ETA, LM_HEURISTIC, FT_DEFAULT,
+		0, LLL_DEFAULT);
 
 	// compute QLinv = Q*L^-1 = det(L)*L^-1 = matadj(L)
 	matadj(d, L, C, LC, QLinv);
@@ -1169,8 +1184,6 @@ int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 						uint64_t mi = id % 509;	// number of buckets
 						mi = mi*id % 509;
 						mi = mi*id % 509;
-						if (id == 612750195)
-							cout << to_string(id);
 						M[m[mi]] = (keyval){ id, logp };
 						m[mi]++; // we are relying on the TLB
 						int64_t mstart = mi*(1ul<<(mbb-9));
