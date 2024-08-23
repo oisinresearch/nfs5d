@@ -2,7 +2,6 @@
 #include <stdint.h>	// int64_t
 #include <iostream> // cout
 #include <iomanip> // setprecision
-#include "L2lu64.h"
 #include <gmpxx.h>
 #include "intpoly.h"
 #include <cmath>	// sqrt
@@ -13,6 +12,7 @@
 #include "mpz_poly.h"
 #include <sstream>	// stringstream
 #include <stack>	// stack
+#include "L2lu64.h"
 
 using std::cout;
 using std::endl;
@@ -35,17 +35,7 @@ struct keyval {
 	uint8_t logp;
 };
 
-union int128_t {
-	__int128 int128;
-	int8_t bytes[16];
-};
-
 __int128 MASK64;
-
-bool int128_compare(const int128_t &v1, const int128_t &v2)
-{
-	return v2.int128 < v1.int128;
-}
 
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
@@ -80,7 +70,7 @@ int main(int argc, char** argv)
 	//cout << (uint64_t)(MASK64) << " " << (uint64_t)(MASK64 >> 64) << endl;
 
 	if (argc != 17) {
-		cout << endl << "Usage: ./slcsieve inputpoly factorbasefile d Amax Bmax N "
+		cout << endl << "Usage: ./slcsieve5dx inputpoly factorbasefile d Amax Bmax N "
 			"Bmin Bmax Rmin Rmax th0 th1 lpb cofmaxbits mbb bb" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
 		cout << "    factorbasefile  factor base produced with makesievebase" << endl;
@@ -237,12 +227,12 @@ int main(int argc, char** argv)
 	mpz_t lpb; mpz_init(lpb);
 	mpz_init_set_str(lpb, argv[13], 10);
 	int cofmaxbits = atoi(argv[14]);
+	int64_t cofmax = 1 << cofmaxbits;
 	int mbb = atoi(argv[15]);
 	int bb = atoi(argv[16]);
-	int64_t cofmax = 1 << cofmaxbits;
 
 	// main arrays
-	uint64_t Mlen = 1ul<<(mbb);  // 268435456
+	uint64_t Mlen = 1ul << mbb;  // 268435456
 	keyval* M = new keyval[Mlen];	// lattice { id, logp } pairs
 	// allocate 512 bucket pointers in M
 	uint64_t m[512];
@@ -310,7 +300,7 @@ int main(int argc, char** argv)
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		uint64_t total = 0;
 		for (int i = 0; i < 512; i++) {
-			uint64_t mtop = i*(1<<(mbb-9));
+			uint64_t mtop = i*(1ul<<(mbb-9));
 			uint64_t mend = m[i];
 			total += (mend - mtop);
 		}				
@@ -320,7 +310,7 @@ int main(int argc, char** argv)
 		rel.clear();
 		int R0 = 0;
 		for (int i = 0; i < 512; i++) {
-			uint64_t mtop = i*(1<<(mbb-9));
+			uint64_t mtop = i*(1ul<<(mbb-9));
 			uint64_t mend = m[i];
 			std::sort(M + mtop, M + mend, &bucket_sorter);
 			keyval Mmtop = M[mtop];
@@ -373,7 +363,7 @@ int main(int argc, char** argv)
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		total = 0;
 		for (int i = 0; i < 512; i++) {
-			uint64_t mtop = i*(1<<(mbb-9));
+			uint64_t mtop = i*(1ul<<(mbb-9));
 			uint64_t mend = m[i];
 			total += (mend - mtop);
 		}		
@@ -382,7 +372,7 @@ int main(int argc, char** argv)
 		start = clock();
 		int R1 = 0;
 		for (int i = 0; i < 512; i++) {
-			uint64_t mtop = i*(1<<(mbb-9));
+			uint64_t mtop = i*(1ul<<(mbb-9));
 			uint64_t mend = m[i];
 			std::sort(M + mtop, M + mend, &bucket_sorter);
 			keyval Mmtop = M[mtop];
@@ -692,7 +682,7 @@ int main(int argc, char** argv)
 	mpz_clear(factor);
 	mpz_clear(lpb);
 	mpz_clear(N1); mpz_clear(N0);
-	mpz_poly_clear(f1); mpz_poly_clear(f0);
+	mpz_poly_clear(i1); mpz_poly_clear(f1); mpz_poly_clear(f0);
 	mpz_clear(maxB); mpz_clear(maxA);
 	delete[] M;
 	for (int i = 0; i < 8; i++) mpz_clear(pi[i]); delete[] pi;
@@ -760,11 +750,13 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 
 	int i = 0;
 	while (sieve_p[i] < Bmin) i++;
+	int imin = i;
+	int64_t nntotal = 0;
 	int R = Rmin;
 	int64_t p = sieve_p[i];
 	uint8_t logp = log2f(p);
 	uint64_t mj = 0;
-	for (int j = 0; j < 512; j++, mj += (1<<(mbb-9))) m[j] = mj;
+	for (int j = 0; j < 512; j++, mj += (1ul<<(mbb-9))) m[j] = mj;
 	while (p < Bmax) {
 		int ni = sieve_n[i];
 		for (int j = 0; j < ni; j++) {
@@ -789,7 +781,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
 			int nn = enumerate5d(d, d, L, M, m, logp, p, R, 1000, mbb, bb);
-			to_string(nn);
+			nntotal += nn;
 		}
 		
 		// advance to next p
@@ -798,6 +790,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 
 		R = (int)(Rmin + (Rmax - Rmin)*((double)p - Bmin)/((double)Bmax - Bmin));
 	}
+	cout << "# Average of " << (int)((double)nntotal/(i-imin)) << " lattice points per prime." << endl;
 }
 
 void printvector(int d, uint64_t v, int bb)
@@ -827,11 +820,11 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 	int bb2 = bb*2;
 	int bb3 = bb*3;
 	int bb4 = bb*4;
-	int mmax = (1<<mbb)/512;
+	int mmax = (1ul<<mbb)/512;
 
 	int dn = d*n;
 	float* b = new float[dn];
-	float* uu = new float[dn]();
+	float* uu = new float[d*d]();
 	float* bnorm = new float[d];
 	float* sigma = new float[(d+1)*d];
 	float* rhok = new float[d+1];
@@ -840,13 +833,13 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 	float* ck = new float[d];
 	int* wk = new int[d];
 	int* common_part = new int[d];
-	int32_t* c = new int32_t[d]();
+	int64_t* c = new int64_t[d]();
 
 	// Gram-Schmidt orthogonalization
 	int64_t* borig = L;
 	for (int i = 0; i < n; i++) {
 		for (int k = 0; k < d; k++) {
-			uu[k*n + k] = 1;
+			uu[k*d + k] = 1;
 			b[k*n + i] = (float)borig[k*n + i];
 		}
 		for (int j = 0; j < i; j++) {
@@ -856,9 +849,9 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 				dot1 += borig[k*n + i] * b[k*n + j];
 				dot2 += b[k*n + j] * b[k*n + j];
 			}
-			uu[j*n + i] = dot1 / dot2;
+			uu[j*d + i] = dot1 / dot2;
 			for (int k = 0; k < d; k++) {
-				b[k*n + i] -= uu[j*n + i] * b[k*n + j];
+				b[k*n + i] -= uu[j*d + i] * b[k*n + j];
 			}
 		}
 	}
@@ -924,14 +917,14 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 						mi = mi*id % 509;
 						M[m[mi]] = (keyval){ id, logp };
 						m[mi]++; // we are relying on the TLB
-						int64_t mstart = mi*(1<<(mbb-9));
+						int64_t mstart = mi*(1ul<<(mbb-9));
 						if (m[mi] - mstart >= mmax) {
 							cout << "mmax = " << mmax << endl;
 							cout << "mi = " << mi << endl;
 							cout << "mstart = " << mstart << endl;
 							cout << "m[mi] = " << m[mi] << endl;
 							//for (int i = 0; i < 512; i++) {
-							//	mstart = i*(1<<(mbb-9));
+							//	mstart = i*(1ul<<(mbb-9));
 							//	cout << "bucket " << i << " has " << m[i] - mstart << " elements." << endl;
 							//}
 							vector<uint64_t> V;
@@ -957,7 +950,7 @@ int enumerate5d(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 				k--;
 				rk[k] = max(rk[k], rk[k+1]);
 				for (int i = rk[k+1]; i >= k + 1; i--) {
-					sigma[i*n + k] = sigma[(i + 1)*n + k] + vk[i] * uu[k*n + i];
+					sigma[i*n + k] = sigma[(i + 1)*n + k] + vk[i] * uu[k*d + i];
 				}
 				ck[k] = -sigma[(k + 1)*n + k];
 				int vk_old = vk[k];
