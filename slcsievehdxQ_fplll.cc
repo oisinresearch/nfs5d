@@ -31,6 +31,48 @@ using std::stringstream;
 using std::stack;
 using std::abs;
 
+class enumvar {
+	public:
+		float* b;
+		float* uu;
+		float* bnorm;
+		float* sigma;
+		float* rhok;
+		float* ck;
+		int* rk;
+		int* vk;
+		int* wk;
+		int* common_part;
+		int64_t* c;
+		enumvar(int d, int n) {
+			b = new float[d*n];
+			uu = new float[d*d];
+			bnorm = new float[d];
+			sigma = new float[(d+1)*d];
+			rhok = new float[d+1];
+			rk = new int[d+1];
+			vk = new int[d];
+			ck = new float[d];
+			wk = new int[d];
+			common_part = new int[d];
+			c = new int64_t[d]();
+		}
+		~enumvar() {
+			delete[] c;
+			delete[] common_part;
+			delete[] wk;
+			delete[] ck;
+			delete[] vk;
+			delete[] rk;
+			delete[] rhok;
+			delete[] sigma;
+			delete[] bnorm;
+			delete[] uu;
+			delete[] b;
+		}
+};
+
+
 struct keyval {
 	uint64_t id;
 	uint8_t logp;
@@ -44,14 +86,15 @@ void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int
 	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
 	 int mbb, int bb, int64_t Q0, int64_t R0);
 void mpz_set_uint128(mpz_t z, __int128 a);
-void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B);
+void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B, mpz_t &t);
 void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q);
-void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC, ZZ_mat<mpz_t> &Madj);
+void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC,
+	ZZ_mat<mpz_t> &Madj, mpz_t &t);
 void negmat(int d, ZZ_mat<mpz_t> &A);
 int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb);
 int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb);
 int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
-	int R, int nnmax, int mbb, int bb);
+	int R, int nnmax, int mbb, int bb, enumvar *v1);
 void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
@@ -830,6 +873,8 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	mpz_t Rriz; mpz_init(Rriz);
 	__int128 Q = static_cast<__int128>(Q0);
 	__int128 R = static_cast<__int128>(R0);
+	enumvar* v1 = new enumvar(d, n);
+	mpz_t t; mpz_init(t);
 
 	// compute L
 	for (int k = 0; k < d; k++) {
@@ -858,7 +903,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 		0, LLL_DEFAULT);
 
 	// compute QLinv = Q*L^-1 = det(L)*L^-1 = matadj(L)
-	matadj(d, L, C, LC, QLinv);
+	matadj(d, L, C, LC, QLinv, t);
 
 	__int128* Amodp = new __int128[d-2];
 	__int128* Bmodp = new __int128[d-2];
@@ -930,7 +975,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 				0, LLL_DEFAULT);
 			
 			// compute L3
-			matmul(d, L3, QLinv, L2);
+			matmul(d, L3, QLinv, L2, t);
 			matdivexact_ui(d, L3, Q0);
 
 			// convert column-major L3 to flattened row-major L4
@@ -955,7 +1000,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 			}				
 			
 			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
-			int nn = enumeratehd(d, n, L5, M, m, logp, p, Rcurrent, 1000, mbb, bb);
+			int nn = enumeratehd(d, n, L5, M, m, logp, p, Rcurrent, 1000, mbb, bb, v1);
 			nntotal += nn;
 		}
 		
@@ -974,8 +1019,10 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	cout << "# Average of " << (int)((double)nntotal/(i-imin)) << " lattice points per prime." << endl;
 
 	// clear memory
+	mpz_clear(t);
 	delete[] Bmodq; delete[] Amodq; delete[] Bmodp; delete[] Amodp;
 	mpz_clear(Rriz); mpz_clear(Rrz); mpz_clear(PQz);
+	delete v1;
 	delete[] L5; delete[] L4;;
 }
 
@@ -986,10 +1033,8 @@ void mpz_set_uint128(mpz_t z, __int128 a)
 	mpz_import(z, 2, 1, sizeof(uint64_t), 0, 0, hilo);
 }
 
-void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B)
+void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B, mpz_t &t)
 {
-	mpz_t t;
-	mpz_init(t);
     // Perform matrix multiplication C = A * B
     for (int i = 0; i < d; i++) {
         for (int j = 0; j < d; j++) {
@@ -1000,7 +1045,6 @@ void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B)
             }
         }
     }
-	mpz_clear(t);
 }
 
 void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q)
@@ -1013,7 +1057,8 @@ void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q)
     }
 }
 
-void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC, ZZ_mat<mpz_t> &Madj)
+void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC,
+	ZZ_mat<mpz_t> &Madj, mpz_t &t)
 {
 	int dd = d*d;
 	C.fill(0);
@@ -1023,7 +1068,7 @@ void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC, ZZ_mat
     __int128 ai;
     while (true) {
         i++;
-        matmul(d, MC, M, C);
+        matmul(d, MC, M, C, t);
         if (i == d) {
             ai = 0;
 			for (int k = 0; k < d; k++) ai += MC[k][k].get_si();
@@ -1086,41 +1131,29 @@ void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 }
 
 int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
-	int R, int nnmax, int mbb, int bb)
+	int R, int nnmax, int mbb, int bb, enumvar* v1)
 {
 	int64_t hB = 1<<(bb-1);
 	int mmax = (1ul<<mbb)/512;
-
-	int dn = d*n;
-	float* b = new float[dn];
-	float* uu = new float[d*d]();
-	float* bnorm = new float[d];
-	float* sigma = new float[(d+1)*d];
-	float* rhok = new float[d+1];
-	int* rk = new int[d+1];
-	int* vk = new int[d];
-	float* ck = new float[d];
-	int* wk = new int[d];
-	int* common_part = new int[d];
-	int64_t* c = new int64_t[d]();
+	for (int i = 0; i < d*d; i++) v1->uu[i] = 0;
 
 	// Gram-Schmidt orthogonalization
 	int64_t* borig = L;
 	for (int i = 0; i < n; i++) {
 		for (int k = 0; k < d; k++) {
-			uu[k*d + k] = 1;
-			b[k*n + i] = (float)borig[k*d + i];
+			v1->uu[k*d + k] = 1;
+			v1->b[k*n + i] = (float)borig[k*d + i];
 		}
 		for (int j = 0; j < i; j++) {
 			float dot1 = 0;
 			float dot2 = 0;
 			for (int k = 0; k < d; k++) {
-				dot1 += borig[k*d + i] * b[k*n + j];
-				dot2 += b[k*n + j] * b[k*n + j];
+				dot1 += borig[k*d + i] * v1->b[k*n + j];
+				dot2 += v1->b[k*n + j] * v1->b[k*n + j];
 			}
-			uu[j*d + i] = dot1 / dot2;
+			v1->uu[j*d + i] = dot1 / dot2;
 			for (int k = 0; k < d; k++) {
-				b[k*n + i] -= uu[j*d + i] * b[k*n + j];
+				v1->b[k*n + i] -= v1->uu[j*d + i] * v1->b[k*n + j];
 			}
 		}
 	}
@@ -1128,62 +1161,65 @@ int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 	// compute orthogonal basis vector norms
 	for (int i = 0; i < n; i++) {
 		float N = 0;
-		for (int k = 0; k < d; k++) N += b[k*n + i] * b[k*n + i];
-		bnorm[i] = sqrt(N);
+		for (int k = 0; k < d; k++) N += v1->b[k*n + i] * v1->b[k*n + i];
+		v1->bnorm[i] = sqrt(N);
 	}
 
 	// set up variables
 	for (int i = 0; i < d; i++)
-		common_part[i] = 0;
+		v1->common_part[i] = 0;
 	for (int k = 0; k < d + 1; k++) {
 		for (int j = 0; j < n; j++)
-			sigma[k*d + j] = 0;
-		rhok[k] = 0;
-		rk[k] = k;
+			v1->sigma[k*d + j] = 0;
+		v1->rhok[k] = 0;
+		v1->rk[k] = k;
 		if (k < d) {
-			vk[k] = 0;
-			ck[k] = 0;
-			wk[k] = 0;
+			v1->vk[k] = 0;
+			v1->ck[k] = 0;
+			v1->wk[k] = 0;
 		}
 	}
-	vk[0] = 1;
+	v1->vk[0] = 1;
 	int t = 1;
 	int last_nonzero = 0;
 	for (int l = t; l < n; l++) {
 		for (int j = 0; j < d; j++) {
-			common_part[j] += vk[l] * borig[j*d + l];
+			v1->common_part[j] += v1->vk[l] * borig[j*d + l];
 		}
 	}
 	int k = 0;
 	int nn = 0;
 	// enumerate lattice vectors (x,y,z,r,s,t) in sphere with radius R
 	while (true) {
-		rhok[k] = rhok[k+1] + (vk[k] - ck[k]) * (vk[k] - ck[k]) * bnorm[k] * bnorm[k];
-		if (rhok[k] - 0.00005 <= R*R) {
+		v1->rhok[k] = v1->rhok[k+1] + (v1->vk[k] - v1->ck[k]) * (v1->vk[k] - v1->ck[k]) * 
+			v1->bnorm[k] * v1->bnorm[k];
+		if (v1->rhok[k] - 0.00005 <= R*R) {
 			if (k == 0) {
 				if (last_nonzero != 0 || nn == 0) {
-					memset(c, 0, 4*d);
+					memset(v1->c, 0, 8*d);  // note:  typeof(v1->c) is int64_t, 8 bytes
 					bool keep = true;
 					bool iszero = true;
 					for (int j = 0; j < d; j++) {
-						c[j] = 0;
+						v1->c[j] = 0;
 						for (int i = 0; i <= t - 1; i++) {
-							c[j] += vk[i] * borig[j*d + i] + common_part[j];
-							if (abs(c[j]) >= hB) { keep = false; break; }
-							if (c[j] != 0) iszero = false;
+							v1->c[j] += v1->vk[i] * borig[j*d + i] + v1->common_part[j];
+							if (abs(v1->c[j]) >= hB) { keep = false; break; }
+							if (v1->c[j] != 0) iszero = false;
 						}
 						if (!keep) break;
 					}
-					if (c[0] < 0) {	// keep only one of { c, -c } (same information)
-						for (int j = 0; j < d; j++) c[j] = -c[j];
+					if (v1->c[0] < 0) {	// keep only one of { c, -c } (same information)
+						for (int j = 0; j < d; j++) v1->c[j] = -v1->c[j];
 					}
 					// save vector
 					if (keep && !iszero) {
 						uint64_t id = 0;
-						for (int l = 0; l < d; l++) id += (c[l] + hB) << (l * bb);
+						for (int l = 0; l < d; l++) id += (v1->c[l] + hB) << (l * bb);
 						uint64_t mi = id % 509;	// number of buckets
 						mi = mi*id % 509;
 						mi = mi*id % 509;
+						if (id == 4153385671 || mi == 61)
+							to_string(id);
 						M[m[mi]] = (keyval){ id, logp };
 						m[mi]++; // we are relying on the TLB
 						int64_t mstart = mi*(1ul<<(mbb-9));
@@ -1204,30 +1240,39 @@ int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 							}
 							std::sort(V.begin(), V.end());
 							printvectors(d, V, 20, bb);
-							cout << "Bucket overflow, likely memory corruption.  Exiting." << endl;
+							cout << "Bucket overflow, likely memory corruption." << endl;
+							FILE* out;
+							out = fopen("bucket.out", "w+");
+							fprintf(out, "bucket %d", mi);
+							fprintf(out, "\n");
+							for (int l = 0; l < m[mi] - mstart; l++) {
+								fprintf(out, "%ld", M[mstart + l].id);
+								fprintf(out, "\n");
+							}
+							fclose(out);
 							exit(1);
 						}
 						nn++;
 						//if (nn >= nnmax) break;
 					}
 				}
-				if (vk[k] > ck[k]) vk[k] = vk[k] - wk[k];
-				else vk[k] = vk[k] + wk[k];
-				wk[k]++;
+				if (v1->vk[k] > v1->ck[k]) v1->vk[k] = v1->vk[k] - v1->wk[k];
+				else v1->vk[k] = v1->vk[k] + v1->wk[k];
+				v1->wk[k]++;
 			}
 			else {
 				k--;
-				rk[k] = max(rk[k], rk[k+1]);
-				for (int i = rk[k+1]; i >= k + 1; i--) {
-					sigma[i*d + k] = sigma[(i + 1)*d + k] + vk[i] * uu[k*d + i];
+				v1->rk[k] = max(v1->rk[k], v1->rk[k+1]);
+				for (int i = v1->rk[k+1]; i >= k + 1; i--) {
+					v1->sigma[i*d + k] = v1->sigma[(i + 1)*d + k] + v1->vk[i] * v1->uu[k*d + i];
 				}
-				ck[k] = -sigma[(k + 1)*d + k];
-				int vk_old = vk[k];
-				vk[k] = floor(ck[k] + 0.5); wk[k] = 1;
+				v1->ck[k] = -v1->sigma[(k + 1)*d + k];
+				int vk_old = v1->vk[k];
+				v1->vk[k] = floor(v1->ck[k] + 0.5); v1->wk[k] = 1;
 				if (k >= t && k < n) {
 					for (int j = 0; j < d; j++) {
-						common_part[j] -= vk_old * borig[j*d + k];
-						common_part[j] += vk[k] * borig[j*d + k];
+						v1->common_part[j] -= vk_old * borig[j*d + k];
+						v1->common_part[j] += v1->vk[k] * borig[j*d + k];
 					}
 				}
 			}
@@ -1235,55 +1280,43 @@ int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 		else {
 			k++;
 			if (k == n) break;
-			rk[k] = k;
+			v1->rk[k] = k;
 			if (k >= last_nonzero) {
 				last_nonzero = k;
-				int vk_old = vk[k];
-				vk[k]++;
+				int vk_old = v1->vk[k];
+				v1->vk[k]++;
 				if (k >= t && k < n) {
 					for (int j = 0; j < d; j++) {
-						common_part[j] -= vk_old * borig[j*d + k];
-						common_part[j] += vk[k] * borig[j*d + k];
+						v1->common_part[j] -= vk_old * borig[j*d + k];
+						v1->common_part[j] += v1->vk[k] * borig[j*d + k];
 					}
 				}
 			}
 			else {
-				if (vk[k] > ck[k]) {
-					int vk_old = vk[k];
-					vk[k] = vk[k] - wk[k];
+				if (v1->vk[k] > v1->ck[k]) {
+					int vk_old = v1->vk[k];
+					v1->vk[k] = v1->vk[k] - v1->wk[k];
 					if (k >= t && k < n) {
 						for (int j = 0; j < d; j++) {
-							common_part[j] -= vk_old * borig[j*d + k];
-							common_part[j] += vk[k] * borig[j*d + k];
+							v1->common_part[j] -= vk_old * borig[j*d + k];
+							v1->common_part[j] += v1->vk[k] * borig[j*d + k];
 						}
 					}
 				}
 				else {
-					int vk_old = vk[k];
-					vk[k] = vk[k] + wk[k];
+					int vk_old = v1->vk[k];
+					v1->vk[k] = v1->vk[k] + v1->wk[k];
 					if (k >= t && k < n) {
 						for (int j = 0; j < d; j++) {
-							common_part[j] -= vk_old * borig[j*d + k];
-							common_part[j] += vk[k] * borig[j*d + k];
+							v1->common_part[j] -= vk_old * borig[j*d + k];
+							v1->common_part[j] += v1->vk[k] * borig[j*d + k];
 						}
 					}
 				}
-				wk[k]++;
+				v1->wk[k]++;
 			}
 		}
 	}
-
-	delete[] c;
-	delete[] common_part;
-	delete[] wk;
-	delete[] ck;
-	delete[] vk;
-	delete[] rk;
-	delete[] rhok;
-	delete[] sigma;
-	delete[] bnorm;
-	delete[] uu;
-	delete[] b;
 
 	return nn;
 }
