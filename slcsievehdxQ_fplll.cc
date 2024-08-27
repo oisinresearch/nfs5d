@@ -84,7 +84,7 @@ inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
 void slcsieve(int numlc, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
 	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
-	 int mbb, int bb, int64_t Q0, int64_t R0);
+	 int mbb, int bb, int64_t Q0, int64_t R0, mpz_poly f);
 void mpz_set_uint128(mpz_t z, __int128 a);
 void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B, mpz_t &t);
 void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q);
@@ -94,7 +94,9 @@ void negmat(int d, ZZ_mat<mpz_t> &A);
 int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb);
 int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb);
 int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
-	int R, int nnmax, int mbb, int bb, enumvar *v1);
+	int R, int bmax, int64_t* blacklist, int nnmax, int mbb, int bb, enumvar* v1);
+int get_blacklist(ZZ_mat<mpz_t> &L, int d, mpz_poly f, int degf, ZZ_mat<mpz_t> &QLinv,
+	mpz_t* Ak, mpz_t* Bk, int64_t Q0, int64_t R0, int Rmin, int bb, int bmax, int64_t* blacklist);
 void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
@@ -385,7 +387,7 @@ int main(int argc, char** argv)
 		start = clock();
 
 		slcsieve(d, Ak, Bk, Bmin, Bmax, Rmin, Rmax,
-			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb, Q0, RR);
+			sieve_p0, sieve_r0, sieve_n0, degf, M, m, mbb, bb, Q0, RR, f0);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		uint64_t total = 0;
@@ -448,7 +450,7 @@ int main(int argc, char** argv)
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
 		slcsieve(d, Ak, Bk, Bmin, Bmax, Rmin, Rmax,
-			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb, Q0, RR);
+			sieve_p1, sieve_r1, sieve_n1, degg, M, m, mbb, bb, Q0, RR, f1);
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		total = 0;
@@ -849,7 +851,7 @@ int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
 
 void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
 	 int* sieve_p, int* sieve_r, int* sieve_n, int degf, keyval* M, uint64_t* m,
-	int mbb, int bb, int64_t Q0, int64_t R0)
+	int mbb, int bb, int64_t Q0, int64_t R0, mpz_poly f)
 {
 	ZZ_mat<mpz_t> L;
 	ZZ_mat<mpz_t> QLinv;
@@ -868,13 +870,13 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	int dd = d*d;
 	int64_t* L4 = new int64_t[dd];
 	int64_t* L5 = new int64_t[dd];
+	enumvar* v1 = new enumvar(d, n);
+	mpz_t t; mpz_init(t);
 	mpz_t PQz; mpz_init(PQz);
 	mpz_t Rrz; mpz_init(Rrz);
 	mpz_t Rriz; mpz_init(Rriz);
 	__int128 Q = static_cast<__int128>(Q0);
 	__int128 R = static_cast<__int128>(R0);
-	enumvar* v1 = new enumvar(d, n);
-	mpz_t t; mpz_init(t);
 
 	// compute L
 	for (int k = 0; k < d; k++) {
@@ -910,10 +912,14 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	__int128* Amodq = new __int128[d-2];
 	__int128* Bmodq = new __int128[d-2];
 	for (int k = 0; k < d - 2; k++) {
-		// reduce Ak*x + Bk mod p
+		// reduce Ak*x + Bk mod Q
 		Amodq[k] = static_cast<__int128>(mpz_fdiv_ui(Ak[k], Q0));
 		Bmodq[k] = static_cast<__int128>(mpz_fdiv_ui(Bk[k], Q0));
 	}
+
+	int bmax = 40;
+	int64_t* blacklist = new int64_t[bmax];
+	int numb = get_blacklist(L, d, f, degf, QLinv, Ak, Bk, Q0, R0, Rmin, bb, bmax, blacklist);
 
 	int i = 0;
 	while (sieve_p[i] < Bmin) i++;
@@ -999,8 +1005,9 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 				}
 			}				
 			
-			// enumerate all vectors up to radius R in L, up to a max of 1000 vectors
-			int nn = enumeratehd(d, n, L5, M, m, logp, p, Rcurrent, 1000, mbb, bb, v1);
+			// enumerate all vectors up to radius R in L5, up to a max of 1000 vectors
+			int nn = enumeratehd(d, n, L5, M, m, logp, p, Rcurrent, numb, blacklist, 1000,
+				mbb, bb, v1);
 			nntotal += nn;
 		}
 		
@@ -1019,9 +1026,9 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	cout << "# Average of " << (int)((double)nntotal/(i-imin)) << " lattice points per prime." << endl;
 
 	// clear memory
-	mpz_clear(t);
+	delete[] blacklist;
 	delete[] Bmodq; delete[] Amodq; delete[] Bmodp; delete[] Amodp;
-	mpz_clear(Rriz); mpz_clear(Rrz); mpz_clear(PQz);
+	mpz_clear(Rriz); mpz_clear(Rrz); mpz_clear(PQz); mpz_clear(t);
 	delete v1;
 	delete[] L5; delete[] L4;;
 }
@@ -1131,7 +1138,7 @@ void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 }
 
 int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, int64_t p,
-	int R, int nnmax, int mbb, int bb, enumvar* v1)
+	int R, int bmax, int64_t* blacklist, int nnmax, int mbb, int bb, enumvar* v1)
 {
 	int64_t hB = 1<<(bb-1);
 	int mmax = (1ul<<mbb)/512;
@@ -1211,15 +1218,19 @@ int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 					if (v1->c[0] < 0) {	// keep only one of { c, -c } (same information)
 						for (int j = 0; j < d; j++) v1->c[j] = -v1->c[j];
 					}
+					uint64_t id = 0;
+					for (int l = 0; l < d; l++) id += (v1->c[l] + hB) << (l * bb);
+					// do not keep blacklisted vectors
+					for (int l = 0; l < bmax; l++) {
+						if (id == blacklist[l]) {
+							keep = false;
+							break;
+						}
+					}
 					// save vector
 					if (keep && !iszero) {
-						uint64_t id = 0;
-						for (int l = 0; l < d; l++) id += (v1->c[l] + hB) << (l * bb);
 						uint64_t mi = id % 509;	// number of buckets
-						mi = mi*id % 509;
-						mi = mi*id % 509;
-						if (id == 4153385671 || mi == 61)
-							to_string(id);
+						mi = (mi*mi*mi) % 509;
 						M[m[mi]] = (keyval){ id, logp };
 						m[mi]++; // we are relying on the TLB
 						int64_t mstart = mi*(1ul<<(mbb-9));
@@ -1319,6 +1330,151 @@ int enumeratehd(int d, int n, int64_t* L, keyval* M, uint64_t* m, uint8_t logp, 
 	}
 
 	return nn;
+}
+
+int get_blacklist(ZZ_mat<mpz_t> &L, int d, mpz_poly f, int degf, ZZ_mat<mpz_t> &QLinv,
+	mpz_t* Ak, mpz_t* Bk, int64_t Q0, int64_t R0, int Rmin, int bb, int bmax, int64_t* blacklist)
+{
+	ZZ_mat<mpz_t> L2;
+	ZZ_mat<mpz_t> L3;
+	L2.resize(d, d);
+	L3.resize(d, d);
+	int n = d;
+	int dd = d*d;
+	int64_t* L4 = new int64_t[dd];
+	int64_t* L5 = new int64_t[dd];
+	enumvar* v1 = new enumvar(d, n);
+	mpz_t t; mpz_init(t);
+	mpz_t PQz; mpz_init(PQz);
+	mpz_t Rrz; mpz_init(Rrz);
+	mpz_t Rriz; mpz_init(Rriz);
+	int64_t p = 1ul << 60;
+	mpz_t pz; mpz_init_set_ui(pz, p);
+	int64_t* roots = new int64_t[degf]();
+	int64_t* fmodp = new int64_t[degf+1]();
+	int nr = 0;
+	while (nr == 0) {
+		mpz_add_ui(pz, pz, 1);
+		mpz_nextprime(pz, pz);
+		p = mpz_get_ui(pz);
+		for (int i = 0; i <= degf; i++) {			
+			mpz_poly_getcoeff(t, i, f);
+			fmodp[i] = mpz_fdiv_ui(t, p);
+		}
+		nr = polrootsmod(fmodp, degf, roots, p);
+	}
+	int64_t r = roots[0];
+
+	__int128* Amodp = new __int128[d-2];
+	__int128* Bmodp = new __int128[d-2];
+	__int128* Amodq = new __int128[d-2];
+	__int128* Bmodq = new __int128[d-2];
+	for (int k = 0; k < d - 2; k++) {
+		// reduce Ak*x + Bk mod Q
+		Amodq[k] = static_cast<__int128>(mpz_fdiv_ui(Ak[k], Q0));
+		Bmodq[k] = static_cast<__int128>(mpz_fdiv_ui(Bk[k], Q0));
+	}
+	for (int k = 0; k < d - 2; k++) {
+		// reduce Ak*x + Bk mod p
+		Amodp[k] = static_cast<__int128>(mpz_fdiv_ui(Ak[k], p));
+		Bmodp[k] = static_cast<__int128>(mpz_fdiv_ui(Bk[k], p));
+	}
+	__int128 qinvmodp = static_cast<__int128>(modinv(Q0, p));
+	__int128 pinvmodq = static_cast<__int128>(modinv(p, Q0));
+	__int128 P = static_cast<__int128>(p);
+	__int128 Q = static_cast<__int128>(Q0);
+	__int128 R = static_cast<__int128>(R0);
+	__int128 PQ = P*Q;
+	mpz_set_ui(PQz, Q0); mpz_mul_ui(PQz, PQz, p);
+	__int128 r1 = static_cast<__int128>(r);
+
+	// construct sieving lattice for this p
+	for (int k = 0; k < d; k++) {
+		for (int l = 0; l < d; l++) {
+			if (l == d - 1 && k < d-2) {
+				__int128 ri = (Amodp[k]*r1 + Bmodp[k]) % P;
+				__int128 Ri = (Amodq[k]*R + Bmodq[k]) % Q;
+				// compute Rri with CRT
+				__int128 Rri = Q * ((ri * qinvmodp) % P) + P * ((Ri * pinvmodq) % Q);
+				if (Rri > PQ) Rri -= PQ;
+				mpz_set_uint128(Rriz, Rri);
+				mpz_set(L2(k, l).get_data(), Rriz);
+			}
+			else if (k == l) {
+				L2[k][l] = 1;
+			}
+			else {
+				L2[k][l] = 0;
+			}
+		}
+	}
+	// last basis vector gets x - Rr
+	__int128 Rr = Q * ((r1 * qinvmodp) % P) + P * ((R * pinvmodq) % Q);
+	if (Rr > PQ) Rr -= PQ;
+	mpz_set_uint128(Rrz, Rr);
+	mpz_set(L2(d-2,d-1).get_data(), Rrz);
+	mpz_set(L2(d-1,d-1).get_data(), PQz);
+
+	// reduce L2 using fplll
+	lll_reduction(L2, LLL_DEF_DELTA, LLL_DEF_ETA, LM_HEURISTIC, FT_DEFAULT,
+		0, LLL_DEFAULT);
+	
+	// compute L3
+	matmul(d, L3, QLinv, L2, t);
+	matdivexact_ui(d, L3, Q0);
+
+	// convert column-major L3 to flattened row-major L4
+	for (int k = 0; k < d; k++)
+		for (int l = 0; l < d; l++)
+			L4[k*d + l] = L3(l, k).get_si();
+
+	// computing blacklist lattice L5 by extracting invalid basis vectors from L4
+	n = 0;
+	for (int k = 0; k < d; k++) {
+		int64_t A = 0; int64_t B = 0;
+		for (int l = 0; l < d-2; l++) {
+			A += L2(k, l).get_si() * mpz_get_si(Ak[l]);
+			B += L2(k, l).get_si() * mpz_get_si(Bk[l]);
+		}
+		A += L2(k, d-2).get_si();
+		B -= L2(k, d-1).get_si();
+		if (A == 0 && B == 0) {
+			for (int l = 0; l < d; l++) L5[l*d + n] = L4[l*d + k];
+			n++;
+		}
+	}
+	
+	// enumerate all vectors up to radius R in L5, up to a max of 1000 vectors
+	uint64_t m[512] = { 0 };
+	int mbb = 16;
+	keyval* M = new keyval[1ul << mbb]();
+	for (int i = 0; i < 512; i++) {
+		uint64_t mtop = i*(1ul<<(mbb-9));
+		uint64_t mend = m[i];
+	}
+	int nn = enumeratehd(d, n, L5, M, m, 0, p, Rmin, 0, blacklist, 1000, mbb, bb, v1);
+	if (nn >= bmax) {
+		cout << "Too many vectors to blacklist.  Increase Amax/Bmax.  Exiting..." << endl;
+		exit(1);
+	}
+
+	int k = 0;
+	for (int i = 0; i < 512; i++) {
+		int64_t mstart = i*(1ul<<(mbb-9));
+		for (int j = mstart; j < m[i]; j++) {
+			blacklist[k++] = M[j].id;
+		}
+	}
+
+	// free memory
+	delete[] M;
+	delete[] Bmodq; delete[] Amodq; delete[] Bmodp; delete[] Amodp;
+	delete[] fmodp; delete[] roots;
+	mpz_clear(Rriz); mpz_clear(Rrz); mpz_clear(PQz); mpz_clear(t);
+	delete v1;
+	delete[] L5; delete[] L4;;
+	
+	return k;
 }
 
 inline bool bucket_sorter(keyval const& kv1, keyval const& kv2)
