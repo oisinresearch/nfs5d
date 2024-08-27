@@ -920,6 +920,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 	int bmax = 40;
 	int64_t* blacklist = new int64_t[bmax];
 	int numb = get_blacklist(L, d, f, degf, QLinv, Ak, Bk, Q0, R0, Rmin, bb, bmax, blacklist);
+	cout << "# Number of blacklist vectors: " << to_string(numb) << endl;
 
 	int i = 0;
 	while (sieve_p[i] < Bmin) i++;
@@ -1445,8 +1446,10 @@ int get_blacklist(ZZ_mat<mpz_t> &L, int d, mpz_poly f, int degf, ZZ_mat<mpz_t> &
 	}
 	
 	// enumerate all vectors up to radius R in L5, up to a max of 1000 vectors
-	uint64_t m[512] = { 0 };
 	int mbb = 16;
+	uint64_t m[512] = { 0 };
+	uint64_t mj = 0;
+	for (int j = 0; j < 512; j++, mj += (1ul<<(mbb-9))) m[j] = mj;
 	keyval* M = new keyval[1ul << mbb]();
 	for (int i = 0; i < 512; i++) {
 		uint64_t mtop = i*(1ul<<(mbb-9));
