@@ -919,7 +919,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 
 	int bmax = 40;
 	int64_t* blacklist = new int64_t[bmax];
-	int numb = get_blacklist(L, d, f, degf, QLinv, Ak, Bk, Q0, R0, Rmin, bb, bmax, blacklist);
+	int numb = get_blacklist(L, d, f, degf, QLinv, Ak, Bk, Q0, R0, Rmin + 30, bb, bmax, blacklist);
 	cout << "# Number of blacklist vectors: " << to_string(numb) << endl;
 
 	int i = 0;
@@ -1112,7 +1112,7 @@ void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w)
 {
 	for (int j = 0; j < d; j++) {
 		for (int i = 0; i < n; i++) {
-			cout << fixed << setprecision(pr) << setw(w) << L(i, j).get_si() << (i<n-1?",":"") << "\t";
+			cout << fixed << setprecision(pr) << setw(w) << mpz_get_str(NULL, 10, L(i, j).get_data()) << (i<n-1?",":"") << "\t";
 		}
 		cout << ";\\" << endl << flush;
 	}
