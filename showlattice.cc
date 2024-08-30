@@ -204,7 +204,6 @@ int main(int argc, char** argv)
 	}
 	cout << endl << endl;
 
-	int n = d;
 	int dd = d*d;
 	int64_t* L4 = new int64_t[dd];
 	int64_t* L5 = new int64_t[dd];
@@ -291,6 +290,27 @@ int main(int argc, char** argv)
 		if (k < d - 1) cout << "," << flush;
 	}
 	cout << endl << endl;
+
+	// computing sieving lattice L5 by extracting valid basis vectors from L4
+	cout << "basis vectors which give A*x + B = 0 (indexed from zero): " << flush;
+	int n = 0;
+	for (int k = 0; k < d; k++) {
+		int64_t A = 0; int64_t B = 0;
+		for (int l = 0; l < d-2; l++) {
+			A += L2(k, l).get_si() * mpz_get_si(Ak[l]);
+			B += L2(k, l).get_si() * mpz_get_si(Bk[l]);
+		}
+		A += L2(k, d-2).get_si();
+		B -= L2(k, d-1).get_si();
+		if (A != 0 && B != 0) {
+			for (int l = 0; l < d; l++) L5[l*d + n] = L4[l*d + k];
+			n++;
+		}
+		else {
+			cout << k << "," << flush;
+		}
+	}
+	cout << endl;
 
 	// free memory
 	delete[] L5; delete[] L4;
