@@ -919,7 +919,8 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rma
 
 	int bmax = 40;
 	int64_t* blacklist = new int64_t[bmax];
-	int numb = get_blacklist(L, d, f, degf, QLinv, Ak, Bk, Q0, R0, Rmin + 30, bb, bmax, blacklist);
+	//int numb = get_blacklist(L, d, f, degf, QLinv, Ak, Bk, Q0, R0, Rmin + 30, bb, bmax, blacklist);
+	int numb = 0;
 	cout << "# Number of blacklist vectors: " << to_string(numb) << endl;
 
 	int i = 0;

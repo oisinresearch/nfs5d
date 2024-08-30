@@ -5,6 +5,7 @@ all:
 	g++ -o slcsievehdx_fplll -lgmp -lgmpxx -lfplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O3
 	g++ -o slcsievehdxQ -lgmp -lgmpxx slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
 	g++ -o slcsievehdxQ_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
+	g++ -o showlattice -lgmp -lgmpxx -lfplll showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
 
 debug:
 	g++ -o makesievebase -lgmp -lgmpxx makesievebase.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O0 -g
@@ -13,6 +14,7 @@ debug:
 	g++ -o slcsievehdx_fplll -lgmp -lgmpxx -lfplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
 	g++ -o slcsievehdxQ -lgmp -lgmpxx slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
 	g++ -o slcsievehdxQ_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
+	g++ -o showlattice -lgmp -lgmpxx -lfplll showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
 
 test:
 	g++ -o fplll_test fplll_test.cc -lfplll -lgmp -lgmpxx
@@ -27,3 +29,4 @@ clean:
 	rm -f slcsievehdxQ_fplll
 	rm -f fplll_test
 	rm -f L2_test
+	rm -f showlattice
