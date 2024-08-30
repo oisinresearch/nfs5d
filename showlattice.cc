@@ -360,7 +360,7 @@ int main(int argc, char** argv)
 	int Rmax = atoi(argv[9]);
 	int bb = atoi(argv[10]);
 	int nn = enumeratehd(d, n, L5, Rmax, 1000, bb, v1);
-	cout << "Lp has " << nn << " vectors up to radius " << Rmax << endl << endl;
+	cout << "Lp has " << nn << " valid vectors giving nonzero A*x + B up to radius " << Rmax << endl << endl;
 
 	// free memory
 	delete[] L5; delete[] L4;
@@ -669,6 +669,8 @@ int enumeratehd(int d, int n, int64_t* L, int R, int nnmax, int bb, enumvar* v1)
 					}
 					// save vector
 					if (keep && !iszero) {
+						//for (int j = 0; j < d; j++) cout << v1->c[j] << "," << flush;
+						//cout << endl;
 						nn++;
 						//if (nn >= nnmax) break;
 					}
