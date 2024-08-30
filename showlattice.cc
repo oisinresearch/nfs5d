@@ -31,8 +31,50 @@ using std::stringstream;
 using std::stack;
 using std::abs;
 
+class enumvar {
+	public:
+		float* b;
+		float* uu;
+		float* bnorm;
+		float* sigma;
+		float* rhok;
+		float* ck;
+		int* rk;
+		int* vk;
+		int* wk;
+		int* common_part;
+		int64_t* c;
+		enumvar(int d, int n) {
+			b = new float[d*n];
+			uu = new float[d*d];
+			bnorm = new float[d];
+			sigma = new float[(d+1)*d];
+			rhok = new float[d+1];
+			rk = new int[d+1];
+			vk = new int[d];
+			ck = new float[d];
+			wk = new int[d];
+			common_part = new int[d];
+			c = new int64_t[d]();
+		}
+		~enumvar() {
+			delete[] c;
+			delete[] common_part;
+			delete[] wk;
+			delete[] ck;
+			delete[] vk;
+			delete[] rk;
+			delete[] rhok;
+			delete[] sigma;
+			delete[] bnorm;
+			delete[] uu;
+			delete[] b;
+		}
+};
+
 __int128 MASK64;
 
+int enumeratehd(int d, int n, int64_t* L, int R, int nnmax, int bb, enumvar* v1);
 int l2norm(ZZ_mat<mpz_t> &L, int d, int k);
 inline int max(int u, int v);
 void mpz_set_uint128(mpz_t z, __int128 a);
@@ -57,7 +99,7 @@ int main(int argc, char** argv)
 	MASK64 = MASK64 << 64;
 	MASK64 = MASK64 - 1L;
 
-	if (argc != 9) {
+	if (argc != 11) {
 		cout << endl << "Usage: ./showlattice inputpoly d Q R p r" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
 		cout << "    d               sieving dimension" << endl;
@@ -67,6 +109,8 @@ int main(int argc, char** argv)
 		cout << "    R               root of sieving polynomial mod Q" << endl;
 		cout << "    p               sieving prime p (can be up to 2^64)" << endl;
 		cout << "    r               root of sieving polynomial mod p" << endl;
+		cout << "    Rmax            radius to count vectors" << endl;
+		cout << "    bb              absolute coordinate bit length" << endl;
 		cout << endl;
 		return 0;
 	}
@@ -204,6 +248,7 @@ int main(int argc, char** argv)
 	}
 	cout << endl << endl;
 
+	enumvar* v1 = new enumvar(d, d);
 	int dd = d*d;
 	int64_t* L4 = new int64_t[dd];
 	int64_t* L5 = new int64_t[dd];
@@ -311,9 +356,15 @@ int main(int argc, char** argv)
 		}
 	}
 	cout << endl;
+	
+	int Rmax = atoi(argv[9]);
+	int bb = atoi(argv[10]);
+	int nn = enumeratehd(d, n, L5, Rmax, 1000, bb, v1);
+	cout << "Lp has " << nn << " vectors up to radius " << Rmax << endl << endl;
 
 	// free memory
 	delete[] L5; delete[] L4;
+	delete v1;
 	delete[] Bmodq; delete[] Amodq; delete[] Bmodp; delete[] Amodp;
 	gmp_randclear(state);
 	for (int i = 0; i < d - 2; i++) {
@@ -536,3 +587,153 @@ inline int64_t gcd(int64_t a, int64_t b)
 	return a;
 }
 
+
+int enumeratehd(int d, int n, int64_t* L, int R, int nnmax, int bb, enumvar* v1)
+{
+	int64_t hB = 1<<(bb-1);
+	for (int i = 0; i < d*d; i++) v1->uu[i] = 0;
+
+	// Gram-Schmidt orthogonalization
+	int64_t* borig = L;
+	for (int i = 0; i < n; i++) {
+		for (int k = 0; k < d; k++) {
+			v1->uu[k*d + k] = 1;
+			v1->b[k*n + i] = (float)borig[k*d + i];
+		}
+		for (int j = 0; j < i; j++) {
+			float dot1 = 0;
+			float dot2 = 0;
+			for (int k = 0; k < d; k++) {
+				dot1 += borig[k*d + i] * v1->b[k*n + j];
+				dot2 += v1->b[k*n + j] * v1->b[k*n + j];
+			}
+			v1->uu[j*d + i] = dot1 / dot2;
+			for (int k = 0; k < d; k++) {
+				v1->b[k*n + i] -= v1->uu[j*d + i] * v1->b[k*n + j];
+			}
+		}
+	}
+
+	// compute orthogonal basis vector norms
+	for (int i = 0; i < n; i++) {
+		float N = 0;
+		for (int k = 0; k < d; k++) N += v1->b[k*n + i] * v1->b[k*n + i];
+		v1->bnorm[i] = sqrt(N);
+	}
+
+	// set up variables
+	for (int i = 0; i < d; i++)
+		v1->common_part[i] = 0;
+	for (int k = 0; k < d + 1; k++) {
+		for (int j = 0; j < n; j++)
+			v1->sigma[k*d + j] = 0;
+		v1->rhok[k] = 0;
+		v1->rk[k] = k;
+		if (k < d) {
+			v1->vk[k] = 0;
+			v1->ck[k] = 0;
+			v1->wk[k] = 0;
+		}
+	}
+	v1->vk[0] = 1;
+	int t = 1;
+	int last_nonzero = 0;
+	for (int l = t; l < n; l++) {
+		for (int j = 0; j < d; j++) {
+			v1->common_part[j] += v1->vk[l] * borig[j*d + l];
+		}
+	}
+	int k = 0;
+	int nn = 0;
+	// enumerate lattice vectors (x,y,z,r,s,t) in sphere with radius R
+	while (true) {
+		v1->rhok[k] = v1->rhok[k+1] + (v1->vk[k] - v1->ck[k]) * (v1->vk[k] - v1->ck[k]) * 
+			v1->bnorm[k] * v1->bnorm[k];
+		if (v1->rhok[k] - 0.00005 <= R*R) {
+			if (k == 0) {
+				if (last_nonzero != 0 || nn == 0) {
+					memset(v1->c, 0, 8*d);  // note:  typeof(v1->c) is int64_t, 8 bytes
+					bool keep = true;
+					bool iszero = true;
+					for (int j = 0; j < d; j++) {
+						v1->c[j] = 0;
+						for (int i = 0; i <= t - 1; i++) {
+							v1->c[j] += v1->vk[i] * borig[j*d + i] + v1->common_part[j];
+							if (abs(v1->c[j]) >= hB) { keep = false; break; }
+							if (v1->c[j] != 0) iszero = false;
+						}
+						if (!keep) break;
+					}
+					if (v1->c[0] < 0) {	// keep only one of { c, -c } (same information)
+						for (int j = 0; j < d; j++) v1->c[j] = -v1->c[j];
+					}
+					// save vector
+					if (keep && !iszero) {
+						nn++;
+						//if (nn >= nnmax) break;
+					}
+				}
+				if (v1->vk[k] > v1->ck[k]) v1->vk[k] = v1->vk[k] - v1->wk[k];
+				else v1->vk[k] = v1->vk[k] + v1->wk[k];
+				v1->wk[k]++;
+			}
+			else {
+				k--;
+				v1->rk[k] = max(v1->rk[k], v1->rk[k+1]);
+				for (int i = v1->rk[k+1]; i >= k + 1; i--) {
+					v1->sigma[i*d + k] = v1->sigma[(i + 1)*d + k] + v1->vk[i] * v1->uu[k*d + i];
+				}
+				v1->ck[k] = -v1->sigma[(k + 1)*d + k];
+				int vk_old = v1->vk[k];
+				v1->vk[k] = floor(v1->ck[k] + 0.5); v1->wk[k] = 1;
+				if (k >= t && k < n) {
+					for (int j = 0; j < d; j++) {
+						v1->common_part[j] -= vk_old * borig[j*d + k];
+						v1->common_part[j] += v1->vk[k] * borig[j*d + k];
+					}
+				}
+			}
+		}
+		else {
+			k++;
+			if (k == n) break;
+			v1->rk[k] = k;
+			if (k >= last_nonzero) {
+				last_nonzero = k;
+				int vk_old = v1->vk[k];
+				v1->vk[k]++;
+				if (k >= t && k < n) {
+					for (int j = 0; j < d; j++) {
+						v1->common_part[j] -= vk_old * borig[j*d + k];
+						v1->common_part[j] += v1->vk[k] * borig[j*d + k];
+					}
+				}
+			}
+			else {
+				if (v1->vk[k] > v1->ck[k]) {
+					int vk_old = v1->vk[k];
+					v1->vk[k] = v1->vk[k] - v1->wk[k];
+					if (k >= t && k < n) {
+						for (int j = 0; j < d; j++) {
+							v1->common_part[j] -= vk_old * borig[j*d + k];
+							v1->common_part[j] += v1->vk[k] * borig[j*d + k];
+						}
+					}
+				}
+				else {
+					int vk_old = v1->vk[k];
+					v1->vk[k] = v1->vk[k] + v1->wk[k];
+					if (k >= t && k < n) {
+						for (int j = 0; j < d; j++) {
+							v1->common_part[j] -= vk_old * borig[j*d + k];
+							v1->common_part[j] += v1->vk[k] * borig[j*d + k];
+						}
+					}
+				}
+				v1->wk[k]++;
+			}
+		}
+	}
+
+	return nn;
+}
