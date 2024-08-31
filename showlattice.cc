@@ -110,7 +110,7 @@ int main(int argc, char** argv)
 		cout << "    p               sieving prime p (can be up to 2^64)" << endl;
 		cout << "    r               root of sieving polynomial mod p" << endl;
 		cout << "    N1              count vectors with norm >= N1" << endl;
-		cout << "    N2              count vectors <= N2" << endl;
+		cout << "    N2              enumerate vectors with norm <= N2" << endl;
 		cout << "    bb              absolute coordinate bit length" << endl;
 		cout << endl;
 		return 0;
