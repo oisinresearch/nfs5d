@@ -74,7 +74,7 @@ class enumvar {
 
 __int128 MASK64;
 
-int enumeratehd(int d, int n, int64_t* L, int R, int nnmax, int bb, enumvar* v1);
+int enumeratehd(int d, int n, int64_t* L, int N1, int N2, int nnmax, int bb, enumvar* v1);
 int l2norm(ZZ_mat<mpz_t> &L, int d, int k);
 inline int max(int u, int v);
 void mpz_set_uint128(mpz_t z, __int128 a);
@@ -99,7 +99,7 @@ int main(int argc, char** argv)
 	MASK64 = MASK64 << 64;
 	MASK64 = MASK64 - 1L;
 
-	if (argc != 11) {
+	if (argc != 12) {
 		cout << endl << "Usage: ./showlattice inputpoly d Q R p r" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
 		cout << "    d               sieving dimension" << endl;
@@ -109,7 +109,8 @@ int main(int argc, char** argv)
 		cout << "    R               root of sieving polynomial mod Q" << endl;
 		cout << "    p               sieving prime p (can be up to 2^64)" << endl;
 		cout << "    r               root of sieving polynomial mod p" << endl;
-		cout << "    Rmax            radius to count vectors" << endl;
+		cout << "    N1              count vectors with norm >= N1" << endl;
+		cout << "    N2              count vectors <= N2" << endl;
 		cout << "    bb              absolute coordinate bit length" << endl;
 		cout << endl;
 		return 0;
@@ -357,10 +358,12 @@ int main(int argc, char** argv)
 	}
 	cout << endl;
 	
-	int Rmax = atoi(argv[9]);
-	int bb = atoi(argv[10]);
-	int nn = enumeratehd(d, n, L5, Rmax, 1000, bb, v1);
-	cout << "Lp has " << nn << " valid vectors giving nonzero A*x + B up to radius " << Rmax << endl << endl;
+	int N1 = atoi(argv[9]);
+	int N2 = atoi(argv[10]);
+	int bb = atoi(argv[11]);
+	int nn = enumeratehd(d, n, L5, N1, N2, 1000, bb, v1);
+	cout << "reached " << nn << " vectors in Lp giving nonzero A*x + B in norm range [" << N1
+		<< "," << N2 << "]" << endl << endl;
 
 	// free memory
 	delete[] L5; delete[] L4;
@@ -588,7 +591,7 @@ inline int64_t gcd(int64_t a, int64_t b)
 }
 
 
-int enumeratehd(int d, int n, int64_t* L, int R, int nnmax, int bb, enumvar* v1)
+int enumeratehd(int d, int n, int64_t* L, int N1, int N2, int nnmax, int bb, enumvar* v1)
 {
 	int64_t hB = 1<<(bb-1);
 	for (int i = 0; i < d*d; i++) v1->uu[i] = 0;
@@ -649,7 +652,8 @@ int enumeratehd(int d, int n, int64_t* L, int R, int nnmax, int bb, enumvar* v1)
 	while (true) {
 		v1->rhok[k] = v1->rhok[k+1] + (v1->vk[k] - v1->ck[k]) * (v1->vk[k] - v1->ck[k]) * 
 			v1->bnorm[k] * v1->bnorm[k];
-		if (v1->rhok[k] - 0.00005 <= R*R) {
+		double N = v1->rhok[k] - 0.00005;
+		if (N <= N2) {
 			if (k == 0) {
 				if (last_nonzero != 0 || nn == 0) {
 					memset(v1->c, 0, 8*d);  // note:  typeof(v1->c) is int64_t, 8 bytes
@@ -667,6 +671,7 @@ int enumeratehd(int d, int n, int64_t* L, int R, int nnmax, int bb, enumvar* v1)
 					if (v1->c[0] < 0) {	// keep only one of { c, -c } (same information)
 						for (int j = 0; j < d; j++) v1->c[j] = -v1->c[j];
 					}
+					if (N < N1) keep = false;
 					// save vector
 					if (keep && !iszero) {
 						//for (int j = 0; j < d; j++) cout << v1->c[j] << "," << flush;
