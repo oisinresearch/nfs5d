@@ -361,9 +361,11 @@ int main(int argc, char** argv)
 	int N1 = atoi(argv[9]);
 	int N2 = atoi(argv[10]);
 	int bb = atoi(argv[11]);
+	int64_t hB = 1<<(bb-1);
 	int nn = enumeratehd(d, n, L5, N1, N2, 1000, bb, v1);
-	cout << "reached " << nn << " vectors in Lp giving nonzero A*x + B in norm range [" << N1
-		<< "," << N2 << "]" << endl << endl;
+	cout << "reached " << nn << " vectors in [" << -hB << "," << hB << "]^" << d <<
+		" in Lp giving nonzero A*x + B in norm range [" << N1 << "," << N2 << "]" <<
+		endl << endl;
 
 	// free memory
 	delete[] L5; delete[] L4;
