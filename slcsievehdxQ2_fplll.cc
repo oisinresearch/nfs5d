@@ -80,15 +80,14 @@ struct keyval {
 
 __int128 MASK64;
 
-void loadpolys(string polyfile, mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1,
+void loadpolys(string polyfile, mpz_t* &f0poly, mpz_t* &f1poly, int &degf0, int &degf1,
 	bool verbose);
-void loadsievebase(string filename, int &k0, int &k1, int* sieve_p0, int* sieve_r0,
-	int* sieve_p1, int* sieve_r1);
+void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &sieve_r0,
+	int* &sieve_p1, int* &sieve_r1);
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
-void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
-	 int* sieve_p, int* sieve_r, int degf, mpz_poly f, uint8_t* M,
-	 int blen, int bb, int64_t Q0, int64_t R0, int numt);
+void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* sieve_p,
+	 int* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0, int numt);
 void mpz_set_uint128(mpz_t z, __int128 a);
 void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B, mpz_t &t);
 void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q);
@@ -209,8 +208,6 @@ int main(int argc, char** argv)
 	int64_t RR = strtoll(argv[16], NULL, 10);
 	__int128 Q = static_cast<__int128>(Q0);
 	__int128 R = static_cast<__int128>(RR);
-	int64_t p0max = sieve_p0[k0-1];
-	int64_t p1max = sieve_p1[k1-1];
 
 	// main arrays
 	uint64_t Mlen = 1ul << (d*bb);
@@ -310,7 +307,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, sizeof(M));
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p0, sieve_r0, degf0, f0, M,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p0, sieve_r0, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
@@ -343,7 +340,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, sizeof(M));
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p1, sieve_r1, degf1, f1, M,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p1, sieve_r1, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
@@ -707,9 +704,8 @@ int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
 	return B;
 }
 
-void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
-	 int* sieve_p, int* sieve_r, int degf, mpz_poly f, uint8_t* M,
-	 int blen, int bb, int64_t Q0, int64_t R0, int numt)
+void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* sieve_p,
+	 int* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0, int numt)
 {
 	// per-thread buffers to hold 64-bit encoded sieve vectors
 	uint64_t* Bt = new uint64_t[blen * numt]();
@@ -735,7 +731,10 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
 	int64_t** L4 = new int64_t*[numt];
 	int64_t** L5 = new int64_t*[numt];
 	enumvar** v1 = new enumvar*[numt];
-	mpz_t* tz; mpz_t* PQz; mpz_t* Rrz; mpz_t* Rriz;
+	mpz_t* tz = new mpz_t[numt];
+	mpz_t* PQz = new mpz_t[numt];
+	mpz_t* Rrz = new mpz_t[numt];
+	mpz_t* Rriz = new mpz_t[numt];
 	for (int t = 0; t < numt; t++) {
 		L4[t] = new int64_t[dd];
 		L5[t] = new int64_t[dd];
@@ -933,6 +932,8 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
 		delete[] L5[t];
 		delete[] L4[t];
 	}
+	delete[] Rriz; delete[] Rrz; delete[] PQz; delete[] tz;
+	delete[] v1;
 	delete[] L5; delete[] L4;
 	delete[] L3; delete[] L2;
 	delete[] m;
@@ -1600,7 +1601,7 @@ inline __int128 make_int128(uint64_t lo, uint64_t hi)
 	return N;
 }
 
-void loadpolys(string polyfile, mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1,
+void loadpolys(string polyfile, mpz_t* &f0poly, mpz_t* &f1poly, int &degf0, int &degf1,
 	bool verbose)
 {
 	if (verbose) cout << endl << "Reading input polynomial in file " << polyfile << "..."
@@ -1634,8 +1635,8 @@ void loadpolys(string polyfile, mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &d
 	if (verbose) cout << endl << "Complete.  Degree f0 = " << degf1 << ", degree f1 = " << degf0 << "." << endl;
 }
 
-void loadsievebase(string filename, int &k0, int &k1, int* sieve_p0, int* sieve_r0,
-	int* sieve_p1, int* sieve_r1)
+void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &sieve_r0,
+	int* &sieve_p1, int* &sieve_r1)
 {
 	string line;
 	// read fbb
