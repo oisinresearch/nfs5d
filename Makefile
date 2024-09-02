@@ -5,7 +5,7 @@ all:
 	g++ -o slcsievehdx_fplll -lgmp -lgmpxx -lfplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O3
 	g++ -o slcsievehdxQ -lgmp -lgmpxx slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
 	g++ -o slcsievehdxQ_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
-	g++ -o slcsievehdxQ2_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
+	g++ -o slcsievehdxQ2_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ2_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
 	g++ -o showlattice -lgmp -lgmpxx -lfplll showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
 
 debug:
@@ -15,7 +15,7 @@ debug:
 	g++ -o slcsievehdx_fplll -lgmp -lgmpxx -lfplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
 	g++ -o slcsievehdxQ -lgmp -lgmpxx slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
 	g++ -o slcsievehdxQ_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsievehdxQ2_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
+	g++ -o slcsievehdxQ2_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ2_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
 	g++ -o showlattice -lgmp -lgmpxx -lfplll showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
 
 test:

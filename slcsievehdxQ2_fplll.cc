@@ -80,8 +80,10 @@ struct keyval {
 
 __int128 MASK64;
 
-void loadpolys(mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1, bool verbose);
-void loadsievebase(char* argv2, int &k0, int &k1, sieve_p0, sieve_r0, sieve_p1, sieve_r1);
+void loadpolys(string polyfile, mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1,
+	bool verbose);
+void loadsievebase(string filename, int &k0, int &k1, int* sieve_p0, int* sieve_r0,
+	int* sieve_p1, int* sieve_r1);
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
 void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
@@ -95,7 +97,8 @@ void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC,
 void negmat(int d, ZZ_mat<mpz_t> &A);
 int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb);
 int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb);
-int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nmax, int bb, enumvar* v1, int t1);
+int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nmax,
+	int bb, enumvar* v1, int t1);
 void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
@@ -152,13 +155,14 @@ int main(int argc, char** argv)
 	for (int i = 0; i < argc; i++) cout << argv[i] << " ";
 	cout << endl;
 
+	int degf0; int degf1;
 	mpz_t* f0poly = new mpz_t[20];	// max degree of 20.  Not the neatest
 	mpz_t* f1poly = new mpz_t[20];	// max degree of 20.  Not the neatest
 	for (int i = 0; i < 20; i++) {
 		mpz_init(f0poly[i]);
 		mpz_init(f1poly[i]);
 	}
-	loadpolys(f0poly, f1poly, degf0, degf1, verbose); 
+	loadpolys(string(argv[1]), f0poly, f1poly, degf0, degf1, verbose); 
 
 	// fill small prime array
 	if (verbose) cout << endl << "Starting sieve of Eratosthenes for small primes..." << endl;
@@ -180,7 +184,7 @@ int main(int argc, char** argv)
 	int* sieve_p0; int* sieve_r0; int* sieve_p1; int* sieve_r1;
 	if (verbose) cout << endl << "Loading sieve base..." << endl;
 	start = clock();
-	loadsievebase(&k0, &k1, sieve_p0, sieve_r0, sieve_p1, sieve_r1);
+	loadsievebase(string(argv[2]), k0, k1, sieve_p0, sieve_r0, sieve_p1, sieve_r1);
 	timetaken += ( clock() - start ) / (double) CLOCKS_PER_SEC;
 	if (verbose) cout << "Complete.  Time taken: " << timetaken << "s" << endl;
 	if (verbose) cout << "There are " << k0 << " factor base primes on side 0." << endl;
@@ -306,7 +310,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, sizeof(M));
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p0, sieve_r0, f0, degf0, M,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p0, sieve_r0, degf0, f0, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
@@ -339,7 +343,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, sizeof(M));
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p1, sieve_r1, f1, degf1, M,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p1, sieve_r1, degf1, f1, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
@@ -633,7 +637,6 @@ int main(int argc, char** argv)
 	mpz_clear(N1); mpz_clear(N0);
 	mpz_poly_clear(i1); mpz_poly_clear(f1); mpz_poly_clear(f0);
 	mpz_clear(maxB); mpz_clear(maxA);
-	delete[] m;
 	delete[] M;
 	for (int i = 0; i < 8; i++) mpz_clear(pi[i]); delete[] pi;
 	delete[] sieve_p1;
@@ -709,15 +712,15 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
 	 int blen, int bb, int64_t Q0, int64_t R0, int numt)
 {
 	// per-thread buffers to hold 64-bit encoded sieve vectors
-	uint64_t Bt = new uint64_t[blen * numt]();
+	uint64_t* Bt = new uint64_t[blen * numt]();
 	int* m = new int[numt](); // number of vectors in each buffer
 
 	ZZ_mat<mpz_t> L;
 	ZZ_mat<mpz_t> QLinv;
 	ZZ_mat<mpz_t> C;
 	ZZ_mat<mpz_t> LC;
-	ZZ_mat<mpz_t>* L2 = new ZZ_mat[numt];
-	ZZ_mat<mpz_t>* L3 = new ZZ_mat[numt];
+	ZZ_mat<mpz_t>* L2 = new ZZ_mat<mpz_t>[numt];
+	ZZ_mat<mpz_t>* L3 = new ZZ_mat<mpz_t>[numt];
 	L.resize(d, d);
 	QLinv.resize(d, d);
 	C.resize(d, d);
@@ -772,7 +775,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
 		0, LLL_DEFAULT);
 
 	// compute QLinv = Q*L^-1 = det(L)*L^-1 = matadj(L)
-	matadj(d, L, C, LC, QLinv, tz[t]);
+	matadj(d, L, C, LC, QLinv, tz[0]);
 
 	__int128* Amodq = new __int128[d-2];
 	__int128* Bmodq = new __int128[d-2];
@@ -789,7 +792,6 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
 	}
 
 	int64_t nntotal = 0;
-	int64_t gap = (int64_t)(((double)Bmax - p) / 10.0);
 	int pc = 0;
 	
 	int i = 0;
@@ -800,6 +802,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
 		int t = omp_get_thread_num();
 		int it = i + t;
 		int64_t p = sieve_p[it];
+		int64_t gap = (int64_t)(((double)Bmax - p) / 10.0);
 		int64_t nextmark = p + gap;
 		while (p < Bmax) {
 			int r = sieve_r[it];
@@ -871,13 +874,13 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax,
 				A += L2[t](k, d-2).get_si();
 				B -= L2[t](k, d-1).get_si();
 				if (A != 0 && B != 0) {
-					for (int l = 0; l < d; l++) L5[t][l*d + n] = L4[[t]l*d + k];
+					for (int l = 0; l < d; l++) L5[t][l*d + n] = L4[t][l*d + k];
 					n++;
 				}
 			}
 
 			// enumerate all vectors up to norm Nmax in L5
-			int nn = enumeratehd(d, n, L5[t], &Bt[t*blen], m, blen, Nmax, bb, v1, t);
+			int nn = enumeratehd(d, n, L5[t], &Bt[t*blen], m, blen, Nmax, bb, v1[t], t);
 
 			// sync threads
 			#pragma omp barrier
@@ -1040,7 +1043,8 @@ void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 	}
 }
 
-int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nmax, int bb, enumvar* v1, int t1)
+int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nmax,
+	int bb, enumvar* v1, int t1)
 {
 	int64_t hB = 1<<(bb-1);
 	for (int i = 0; i < d*d; i++) v1->uu[i] = 0;
@@ -1101,7 +1105,7 @@ int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nm
 	while (true) {
 		v1->rhok[k] = v1->rhok[k+1] + (v1->vk[k] - v1->ck[k]) * (v1->vk[k] - v1->ck[k]) * 
 			v1->bnorm[k] * v1->bnorm[k];
-		if (v1->rhok[k] - 0.00005 <= R*R) {
+		if (v1->rhok[k] - 0.00005 <= Nmax) {
 			if (k == 0) {
 				if (last_nonzero != 0 || nn == 0) {
 					memset(v1->c, 0, 8*d);  // note:  typeof(v1->c) is int64_t, 8 bytes
@@ -1596,18 +1600,20 @@ inline __int128 make_int128(uint64_t lo, uint64_t hi)
 	return N;
 }
 
-void loadpolys(mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1, bool verbose)
+void loadpolys(string polyfile, mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1,
+	bool verbose)
 {
-	if (verbose) cout << endl << "Reading input polynomial in file " << argv[1] << "..." << flush;
+	if (verbose) cout << endl << "Reading input polynomial in file " << polyfile << "..."
+		<< flush;
 	string line;
 	char linebuffer[100];
-	ifstream file(argv[1]);
+	ifstream file(polyfile);
 	getline(file, line);	// first line contains number n to factor
 	getline(file, line);	// second line contains the skew
 	line = line.substr(line.find_first_of(" ")+1);
 	int64_t skew = strtoll(line.c_str(), NULL, 10); 
 	// read side 0 poly
-	int degf1 = -1;
+	degf0 = -1;
 	if (verbose) cout << endl << "Side 0 polynomial f0 (ascending coefficients)" << endl;
 	while (getline(file, line) && line.substr(0,1) == "c" ) {
 		line = line.substr(line.find_first_of(" ")+1);
@@ -1615,7 +1621,7 @@ void loadpolys(mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1, bool verbos
 		if (verbose) cout << line << endl;
 	}
 	// read side 1 poly
-	int degf0 = -1;
+	degf1 = -1;
 	bool read = true;
 	if (verbose) cout << endl << "Side 1 polynomial f1: (ascending coefficients)" << endl;
 	while (read && line.substr(0,1) == "Y" ) {
@@ -1628,11 +1634,12 @@ void loadpolys(mpz_t* f0poly, mpz_t* f1poly, int &degf0, int &degf1, bool verbos
 	if (verbose) cout << endl << "Complete.  Degree f0 = " << degf1 << ", degree f1 = " << degf0 << "." << endl;
 }
 
-void loadsievebase(char* argv2, int &k0, int &k1, sieve_p0, sieve_r0, sieve_p1, sieve_r1)
+void loadsievebase(string filename, int &k0, int &k1, int* sieve_p0, int* sieve_r0,
+	int* sieve_p1, int* sieve_r1)
 {
 	string line;
 	// read fbb
-	ifstream fbfile(argv2);
+	ifstream fbfile(filename);
 	getline(fbfile, line);
 	int fbb = atoi(line.c_str());
 	
@@ -1655,7 +1662,7 @@ void loadsievebase(char* argv2, int &k0, int &k1, sieve_p0, sieve_r0, sieve_p1, 
 			vr0.push_back(r0);
 		}
 	}
-	k0 = vp0.length();
+	k0 = vp0.size();
 	sieve_p0 = new int[k0];
 	sieve_r0 = new int[k0];
 	for (int i = 0; i < k0; i++) {
@@ -1682,15 +1689,14 @@ void loadsievebase(char* argv2, int &k0, int &k1, sieve_p0, sieve_r0, sieve_p1, 
 			vr1.push_back(r1);
 		}
 	}
-	k1 = vp1.length();
+	k1 = vp1.size();
 	sieve_p1 = new int[k1];
 	sieve_r1 = new int[k1];
 	for (int i = 0; i < k1; i++) {
 		sieve_p1[i] = vp1[i];
 		sieve_r1[i] = vr1[i];
 	}
-	
-	
+		
 	fbfile.close();
 }
 
