@@ -86,7 +86,7 @@ void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &siev
 	int* &sieve_p1, int* &sieve_r1);
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
-void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* sieve_p,
+void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int nump, int* sieve_p,
 	 int* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0, int numt);
 void mpz_set_uint128(mpz_t z, __int128 a);
 void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B, mpz_t &t);
@@ -96,8 +96,8 @@ void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC,
 void negmat(int d, ZZ_mat<mpz_t> &A);
 int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb);
 int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb);
-int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nmax,
-	int bb, enumvar* v1, int t1);
+int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* &m, int blen, int Nmax,
+	int bb, enumvar* &v1, int t1);
 void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w);
 void printvector(int d, uint64_t v, int hB);
 void printvectors(int d, vector<uint64_t> &M, int n, int hB);
@@ -210,7 +210,7 @@ int main(int argc, char** argv)
 	__int128 R = static_cast<__int128>(RR);
 
 	// main arrays
-	uint64_t Mlen = 1ul << (d*bb);
+	uint64_t Mlen = 1ul << (bb - 1 + (d - 1) * bb);
 	uint8_t* M = new uint8_t[Mlen];
 	cout << fixed << setprecision(1);
 	cout << "# sieve array will use " << Mlen << " bytes (" << (double)(Mlen)/(1l<<30)
@@ -300,6 +300,18 @@ int main(int argc, char** argv)
 			for (int l = 0; l < d; l++)
 				L[k*d + l] = L1(l, k).get_si();
 
+		// test vector
+		int64_t BB = 1<<bb;
+		int64_t hB = 1<<(bb-1);
+		int c[6] = { 1, -3, -5, 7, 2, -9 };
+		uint64_t id = c[0];
+		for (int l = 1; l < d; l++) id += (c[l] + hB) << (l * bb - 1);
+		int* u = new int[d]();
+		u[0] = id % hB;
+		for (int i = 1; i < d; i++) u[i] = (id >> (bb*i - 1)) % BB - hB;
+		for (int i = 0; i < d; i++) cout << u[i] << ",";
+		cout << endl;
+
 		// sieve side 0
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
@@ -307,7 +319,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, sizeof(M));
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p0, sieve_r0, M,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, k0, sieve_p0, sieve_r0, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
@@ -316,7 +328,8 @@ int main(int argc, char** argv)
 		start = clock();
 		rel.clear();
 		int R0 = 0;
-		for (int id = 0; id < Mlen; id++) {
+		#pragma omp parallel for num_threads(numt)
+		for (uint64_t id = 0; id < Mlen; id++) {
 			if (M[id] > th0) {
 				int64_t A64 = rel2A(d, Ak, L, id, bb);
 				int64_t B64 = rel2B(d, Bk, L, id, bb);
@@ -325,6 +338,7 @@ int main(int argc, char** argv)
 					A64 /= g; B64 /= g;
 					if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << id << endl;
 					rel.push_back(id);
+					#pragma omp critical
 					R0++;
 				}
 			}
@@ -332,7 +346,7 @@ int main(int argc, char** argv)
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl << flush;
 		cout << "# " << R0 << " candidates on side 0." << endl << flush;
-
+exit(0);
 		// sieve side 1
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
@@ -340,7 +354,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, sizeof(M));
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, sieve_p1, sieve_r1, M,
+		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, k1, sieve_p1, sieve_r1, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
@@ -348,7 +362,8 @@ int main(int argc, char** argv)
 		cout << "# Finding candidates on side 0..." << endl;
 		start = clock();
 		int R1 = 0;
-		for (int id = 0; id < Mlen; id++) {
+		#pragma omp parallel for num_threads(numt)
+		for (uint64_t id = 0; id < Mlen; id++) {
 			if (M[id] > th1) {
 				int64_t A64 = rel2A(d, Ak, L, id, bb);
 				int64_t B64 = rel2B(d, Bk, L, id, bb);
@@ -357,6 +372,7 @@ int main(int argc, char** argv)
 					A64 /= g; B64 /= g;
 					if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << id << endl;
 					rel.push_back(id);
+					#pragma omp critical
 					R1++;
 				}
 			}
@@ -660,7 +676,8 @@ int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb)
 	// compute v = L*(vector from reli)
 	int* v = new int[d]();
 	int* u = new int[d]();
-	for (int i = 0; i < d; i++) u[i] = (relid >> (bb*i)) % BB - hB;
+	u[0] = relid % hB;
+	for (int i = 1; i < d; i++) u[i] = (relid >> (bb*i - 1)) % BB - hB;
 	for (int j = 0; j < d; j++) {
 		for (int i = 0; i < d; i++) {
 			v[j] += L[j*d + i] * u[i];
@@ -686,7 +703,8 @@ int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
 	// compute v = L*(vector from reli)
 	int* v = new int[d]();
 	int* u = new int[d]();
-	for (int i = 0; i < d; i++) u[i] = (relid >> (bb*i)) % BB - hB;
+	u[0] = relid % hB;
+	for (int i = 1; i < d; i++) u[i] = (relid >> (bb*i - 1)) % BB - hB;
 	for (int j = 0; j < d; j++) {
 		for (int i = 0; i < d; i++) {
 			v[j] += L[j*d + i] * u[i];
@@ -704,7 +722,7 @@ int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
 	return B;
 }
 
-void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* sieve_p,
+void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int nump, int* sieve_p,
 	 int* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0, int numt)
 {
 	// per-thread buffers to hold 64-bit encoded sieve vectors
@@ -725,8 +743,6 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* si
 		L2[t].resize(d, d);
 		L3[t].resize(d, d);
 	}
-	int n = d;
-	int dn = d*n;
 	int dd = d*d;
 	int64_t** L4 = new int64_t*[numt];
 	int64_t** L5 = new int64_t*[numt];
@@ -738,7 +754,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* si
 	for (int t = 0; t < numt; t++) {
 		L4[t] = new int64_t[dd];
 		L5[t] = new int64_t[dd];
-		v1[t] = new enumvar(d,n);
+		v1[t] = new enumvar(d,d);
 		mpz_init(tz[t]);
 		mpz_init(PQz[t]);
 		mpz_init(Rrz[t]);
@@ -793,23 +809,24 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* si
 	int64_t nntotal = 0;
 	int pc = 0;
 	
-	int i = 0;
-	while (sieve_p[i] < Bmin) i++;
-	int imin = i;
+	int imin = 0;
+	while (sieve_p[imin] < Bmin) imin++;
+	int64_t pmin = sieve_p[imin];
+	int imax = imin;
+	while (sieve_p[imax] < Bmax) imax++;
+	int64_t gap = (int64_t)(((double)Bmax - pmin) / 10.0);
+	int64_t nextmark = pmin + gap;
 	#pragma omp parallel num_threads(numt)
 	{
-		int t = omp_get_thread_num();
-		int it = i + t;
-		int64_t p = sieve_p[it];
-		int64_t gap = (int64_t)(((double)Bmax - p) / 10.0);
-		int64_t nextmark = p + gap;
-		while (p < Bmax) {
-			int r = sieve_r[it];
+		#pragma omp for schedule(dynamic, 1)
+		for (int i = imin; i < imax; i++) {
+			int64_t p = sieve_p[i];
+			int r = sieve_r[i];
 			__int128 r1 = static_cast<__int128>(r);
 
-			m[t] = t * blen;
-			Bt[m[t]] = log2f(p); // set first element of buffer to log(p), needed in single thread section
-			m[t]++;
+			int t = omp_get_thread_num();
+			m[t] = 0;
+			uint8_t logp = log2f(p);
 
 			for (int k = 0; k < d - 2; k++) {
 				// reduce Ak*x + Bk mod p
@@ -863,7 +880,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* si
 					L4[t][k*d + l] = L3[t](l, k).get_si();
 
 			// computing sieving lattice L5 by extracting valid basis vectors from L4
-			n = 0;
+			int n = 0;
 			for (int k = 0; k < d; k++) {
 				int64_t A = 0; int64_t B = 0;
 				for (int l = 0; l < d-2; l++) {
@@ -879,32 +896,17 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* si
 			}
 
 			// enumerate all vectors up to norm Nmax in L5
-			int nn = enumeratehd(d, n, L5[t], &Bt[t*blen], m, blen, Nmax, bb, v1[t], t);
+			int nn = enumeratehd(d, n, L5[t], Bt + t*blen, m, blen, Nmax, bb, v1[t], t);
 
-			// sync threads
-			#pragma omp barrier
-
-			// write lattice points to M in one go with a single thread
-			#pragma omp single
-			{
-				for (int j = 0; j < numt; j++) {
-					uint8_t logp = Bt[j*blen];
-					for (int k = 1; k <= m[j]; k++) {
-						M[Bt[j*blen + k]] += logp;
-					}
+			//#/p/r/agma omp critical
+			//{
+				for (int j = 1; j < nn; j++) {
+					#pragma omp atomic update
+					M[Bt[j]] += logp;
 				}
-			}
+			//}
 
-			// advance to next p
 			#pragma omp critical
-			{
-				nntotal += nn;
-				i += numt;
-			}
-			t = omp_get_thread_num();
-			it = i + t;
-			p = sieve_p[it];
-			#pragma omp single
 			{
 				if (p > nextmark && pc < 90) {
 					pc += 10;
@@ -915,7 +917,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* si
 		}
 	}
 	cout << "# 100\% of primes sieved." << endl;
-	cout << "# Average of " << (int)((double)nntotal/(i-imin)) << " lattice points per prime." << endl;
+	//cout << "# Average of " << (int)((double)nntotal/(nump-imin)) << " lattice points per prime ideal." << endl;
 
 	// clear memory
 	for (int t = 0; t < numt; t++) {
@@ -928,7 +930,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int* si
 		mpz_clear(Rrz[t]);
 		mpz_clear(PQz[t]);
 		mpz_clear(tz[t]);
-		delete[] v1[t];
+		delete v1[t];
 		delete[] L5[t];
 		delete[] L4[t];
 	}
@@ -1028,8 +1030,8 @@ void printvector(int d, uint64_t v, int bb)
 {
 	int hB = 1<<(bb-1);
 	int FF = (1<<bb)-1;
-	cout << flush;
-	for (int i = 0; i < d-1; i++) cout << (int)((v>>(bb*i)) & FF)-hB << ",";
+	cout << (v % hB) << "," << flush;
+	for (int i = 1; i < d-1; i++) cout << (int)((v>>(bb*i - 1)) & FF)-hB << ",";
 	cout << (int)(v>>(bb*(d-1)))-hB << endl;
 }
 
@@ -1037,15 +1039,15 @@ void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 {
 	int hB = 1<<(bb-1);
 	int FF = (1<<bb)-1;
-	cout << flush;
 	for (int j = 0; j < n; j++) {
-		for (int i = 0; i < d-1; i++) cout << (int)((M[j]>>(bb*i)) & FF)-hB << ",";
+		cout << (M[j] % hB) << "," << flush;
+		for (int i = 1; i < d-1; i++) cout << (int)((M[j]>>(bb*i - 1)) & FF)-hB << ",";
 		cout << (int)(M[j]>>(bb*(d-1)))-hB << endl;
 	}
 }
 
-int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nmax,
-	int bb, enumvar* v1, int t1)
+int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* &m, int blen, int Nmax,
+	int bb, enumvar* &v1, int t1)
 {
 	int64_t hB = 1<<(bb-1);
 	for (int i = 0; i < d*d; i++) v1->uu[i] = 0;
@@ -1124,8 +1126,8 @@ int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* m, int blen, int Nm
 					if (v1->c[0] < 0) {	// keep only one of { c, -c } (same information)
 						for (int j = 0; j < d; j++) v1->c[j] = -v1->c[j];
 					}
-					uint64_t id = 0;
-					for (int l = 0; l < d; l++) id += (v1->c[l] + hB) << (l * bb);
+					uint64_t id = v1->c[0];
+					for (int l = 1; l < d; l++) id += (v1->c[l] + hB) << (l * bb - 1);
 					// save vector
 					if (keep && !iszero) {
 						Bt[m[t1]] = id;
