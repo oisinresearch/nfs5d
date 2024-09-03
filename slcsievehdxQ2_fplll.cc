@@ -222,7 +222,7 @@ int main(int argc, char** argv)
 
 	mpz_t* pi = new mpz_t[8]; for (int i = 0; i < 8; i++) mpz_init(pi[i]);
 	mpz_poly f0; mpz_poly f1; mpz_poly i1;
-	mpz_poly_init(f0, degf1); mpz_poly_init(f1, degf0); mpz_poly_init(i1, 3);
+	mpz_poly_init(f0, degf0); mpz_poly_init(f1, degf1); mpz_poly_init(i1, 3);
 	mpz_poly_set_mpz(f0, f0poly, degf0);
 	mpz_poly_set_mpz(f1, f1poly, degf1);
 	mpz_t N0; mpz_t N1;
@@ -305,12 +305,12 @@ int main(int argc, char** argv)
 		start = clock();
 
 		// clear M
-		memset(M, 0, sizeof(M));
+		memset(M, 0, Mlen);
 	
 		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, k0, sieve_p0, sieve_r0, M,
 			blen, bb, Q0, RR, numt);
 
-		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
+		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / numt;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		cout << "# Finding candidates on side 0..." << endl;
 		start = clock();
@@ -333,7 +333,7 @@ int main(int argc, char** argv)
 				}
 			}
 		}
-		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
+		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / numt;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl << flush;
 		cout << "# " << R0 << " candidates on side 0." << endl << flush;
 		// sieve side 1
@@ -341,12 +341,12 @@ int main(int argc, char** argv)
 		start = clock();
 		
 		// clear M
-		memset(M, 0, sizeof(M));
+		memset(M, 0, Mlen);
 	
 		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, k1, sieve_p1, sieve_r1, M,
 			blen, bb, Q0, RR, numt);
 
-		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
+		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / numt;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl;
 		cout << "# Finding candidates on side 0..." << endl;
 		start = clock();
@@ -368,7 +368,7 @@ int main(int argc, char** argv)
 				}
 			}
 		}
-		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
+		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / numt;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl << flush;
 		cout << "# " << R1 << " candidates on side 1." << endl << flush;
 		
@@ -1625,7 +1625,7 @@ void loadpolys(string polyfile, mpz_t* &f0poly, mpz_t* &f1poly, int &degf0, int 
 		read = static_cast<bool>(getline(file, line));
 	}
 	file.close();
-	if (verbose) cout << endl << "Complete.  Degree f0 = " << degf1 << ", degree f1 = " << degf0 << "." << endl;
+	if (verbose) cout << endl << "Complete.  Degree f0 = " << degf0 << ", degree f1 = " << degf1 << "." << endl;
 }
 
 void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &sieve_r0,
