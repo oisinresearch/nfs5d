@@ -300,18 +300,6 @@ int main(int argc, char** argv)
 			for (int l = 0; l < d; l++)
 				L[k*d + l] = L1(l, k).get_si();
 
-		// test vector
-		int64_t BB = 1<<bb;
-		int64_t hB = 1<<(bb-1);
-		int c[6] = { 1, -3, -5, 7, 2, -9 };
-		uint64_t id = c[0];
-		for (int l = 1; l < d; l++) id += (c[l] + hB) << (l * bb - 1);
-		int* u = new int[d]();
-		u[0] = id % hB;
-		for (int i = 1; i < d; i++) u[i] = (id >> (bb*i - 1)) % BB - hB;
-		for (int i = 0; i < d; i++) cout << u[i] << ",";
-		cout << endl;
-
 		// sieve side 0
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
@@ -336,17 +324,18 @@ int main(int argc, char** argv)
 				if (A64 != 0 && B64 != 0) {
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
-					if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << id << endl;
-					rel.push_back(id);
 					#pragma omp critical
-					R0++;
+					{
+						if (R0 < 5) cout << A64 << "*x + " << B64 << " : " << id << endl;
+						rel.push_back(id);
+						R0++;
+					}
 				}
 			}
 		}
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl << flush;
 		cout << "# " << R0 << " candidates on side 0." << endl << flush;
-exit(0);
 		// sieve side 1
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
@@ -370,10 +359,12 @@ exit(0);
 				if (A64 != 0 && B64 != 0) {
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
-					if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << id << endl;
-					rel.push_back(id);
 					#pragma omp critical
-					R1++;
+					{
+						if (R1 < 5) cout << A64 << "*x + " << B64 << " : " << id << endl;
+						rel.push_back(id);
+						R1++;
+					}
 				}
 			}
 		}
@@ -900,9 +891,9 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int num
 
 			//#/p/r/agma omp critical
 			//{
-				for (int j = 1; j < nn; j++) {
+				for (int j = 0; j < nn; j++) {
 					#pragma omp atomic update
-					M[Bt[j]] += logp;
+					M[Bt[blen*t + j]] += logp;
 				}
 			//}
 
@@ -1032,7 +1023,7 @@ void printvector(int d, uint64_t v, int bb)
 	int FF = (1<<bb)-1;
 	cout << (v % hB) << "," << flush;
 	for (int i = 1; i < d-1; i++) cout << (int)((v>>(bb*i - 1)) & FF)-hB << ",";
-	cout << (int)(v>>(bb*(d-1)))-hB << endl;
+	cout << (int)(v>>(bb*(d-1) - 1))-hB << endl;
 }
 
 void printvectors(int d, vector<uint64_t> &M, int n, int bb)
@@ -1042,7 +1033,7 @@ void printvectors(int d, vector<uint64_t> &M, int n, int bb)
 	for (int j = 0; j < n; j++) {
 		cout << (M[j] % hB) << "," << flush;
 		for (int i = 1; i < d-1; i++) cout << (int)((M[j]>>(bb*i - 1)) & FF)-hB << ",";
-		cout << (int)(M[j]>>(bb*(d-1)))-hB << endl;
+		cout << (int)(M[j]>>(bb*(d-1) - 1))-hB << endl;
 	}
 }
 
