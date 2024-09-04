@@ -1125,8 +1125,8 @@ int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* &m, int blen, int N
 						m[t1]++;
 						if (m[t1] >= blen) {
 							cout << "blen = " << blen << endl;
-							cout << "t = " << t << endl;
-							cout << "m[t] = " << m[t] << endl;
+							cout << "t = " << t1 << endl;
+							cout << "m[t] = " << m[t1] << endl;
 							cout << "Buffer overflow, likely memory corruption." << endl;
 							exit(1);
 						}
