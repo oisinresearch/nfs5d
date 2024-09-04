@@ -430,7 +430,7 @@ int main(int argc, char** argv)
 				string str = string(str1) + "," + string(str2) + ":";
 						
 				// trial division on side 0
-				int p = primes[0]; int k = 0; 
+				int64_t p = primes[0]; int k = 0; 
 				while (p < sieve_p0[k0-1]) {
 					int valp = 0;
 					while (mpz_fdiv_ui(N0, p) == 0) {
