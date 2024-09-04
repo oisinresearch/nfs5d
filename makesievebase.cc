@@ -81,7 +81,7 @@ int main(int argc, char** argv)
 
 	if (verbose) cout << endl << "Starting sieve of Eratosthenes for small primes..." << endl << flush;
 	int64_t fbb = 1<<21;
-	if (argc >=3) fbb = atoi(argv[2]);
+	if (argc >=3) fbb = strtoll(argv[2], NULL, 10);
 	int64_t max = fbb; // 10000000;// 65536;
 	char* sieve = new char[max+1]();
 	int64_t* primes = new int64_t[max]; // int64_t[155611]; //new int64_t[809228];	//new int64_t[6542]; 	// 2039 is the 309th prime, largest below 2048
@@ -184,19 +184,19 @@ int main(int argc, char** argv)
 	// write output file
 	FILE* out;
 	out = fopen(argv[3], "w+");
-	fprintf(out, "%d\n", fbb);
-	fprintf(out, "%d\n", k0);
+	fprintf(out, "%ld\n", fbb);
+	fprintf(out, "%ld\n", k0);
 	for (int i = 0; i < k0; i++) {
-		fprintf(out, "%d", sievep0[i]);
+		fprintf(out, "%ld", sievep0[i]);
 		for (int j = 0; j < sievenum_s0modp[i]; j++)
-            fprintf(out, ",%d", sieves0[i*degf + j]);
+            fprintf(out, ",%ld", sieves0[i*degf + j]);
 		fprintf(out, "\n");
 	}
-	fprintf(out, "%d\n", k1);
+	fprintf(out, "%ld\n", k1);
 	for (int i = 0; i < k1; i++) {
-		fprintf(out, "%d", sievep1[i]);
+		fprintf(out, "%ld", sievep1[i]);
 		for (int j = 0; j < sievenum_s1modp[i]; j++)
-            fprintf(out, ",%d", sieves1[i*degg + j]);
+            fprintf(out, ",%ld", sieves1[i*degg + j]);
 		fprintf(out, "\n");
 	}
 	fclose(out);

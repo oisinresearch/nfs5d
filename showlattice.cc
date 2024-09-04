@@ -258,7 +258,7 @@ int main(int argc, char** argv)
 	mpz_t Rrz; mpz_init(Rrz);
 	mpz_t Rriz; mpz_init(Rriz);
 
-	int64_t p = atoi(argv[7]);
+	int64_t p = strtoll(argv[7], NULL, 10);
 	int64_t r = strtoll(argv[8], NULL, 10);
 
 	__int128* Amodp = new __int128[d-2];

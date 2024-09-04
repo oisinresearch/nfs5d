@@ -82,12 +82,13 @@ __int128 MASK64;
 
 void loadpolys(string polyfile, mpz_t* &f0poly, mpz_t* &f1poly, int &degf0, int &degf1,
 	bool verbose);
-void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &sieve_r0,
-	int* &sieve_p1, int* &sieve_r1);
+void loadsievebase(string filename, int &k0, int &k1, int64_t* &sieve_p0, int64_t* &sieve_r0,
+	int64_t* &sieve_p1, int64_t* &sieve_r1);
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
-void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int nump, int* sieve_p,
-	 int* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0, int numt);
+void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int64_t B1, int64_t B2, int Nmax, int nump,
+	int64_t* sieve_p, int64_t* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0,
+	int numt);
 void mpz_set_uint128(mpz_t z, __int128 a);
 void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B, mpz_t &t);
 void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q);
@@ -126,15 +127,15 @@ int main(int argc, char** argv)
 
 	if (argc != 19) {
 		cout << endl << "Usage: ./slcsieve inputpoly sievebasefile d Amax Bmax N "
-			"Bmin Bmax Nmax th0 th1 lpb cofmaxbits bb Q R blen numt" << endl << endl;
+			"B1 B2 Nmax th0 th1 lpb cofmaxbits bb Q R blen numt" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
 		cout << "    sievebasefile  sieve base produced with makesievebase" << endl;
 		cout << "    d               sieving dimension" << endl;
 		cout << "    Amax            upper bound for A in A*x + B ideal generator" << endl;
 		cout << "    Bmax            upper bound for B in A*x + B ideal generator" << endl;
 		cout << "    N               number of workunits (think \"special-q\")" << endl;
-		cout << "    Bmin            lower bound on sieving primes" << endl;
-		cout << "    Bmax            upper bound on sieving primes" << endl;
+		cout << "    B1              lower bound on sieving primes" << endl;
+		cout << "    B2              upper bound on sieving primes" << endl;
 		cout << "    Nmax            maximum value of sieve vector norm" << endl;
 		cout << "    th0             sum(logp) threshold on side 0" << endl;
 		cout << "    th1             sum(logp) threshold on side 1" << endl;
@@ -180,7 +181,7 @@ int main(int argc, char** argv)
 
 	// load sieve base
 	int k0; int k1;
-	int* sieve_p0; int* sieve_r0; int* sieve_p1; int* sieve_r1;
+	int64_t* sieve_p0; int64_t* sieve_r0; int64_t* sieve_p1; int64_t* sieve_r1;
 	if (verbose) cout << endl << "Loading sieve base..." << endl;
 	start = clock();
 	loadsievebase(string(argv[2]), k0, k1, sieve_p0, sieve_r0, sieve_p1, sieve_r1);
@@ -194,8 +195,8 @@ int main(int argc, char** argv)
 	mpz_init_set_str(maxA, argv[4], 10);
 	mpz_init_set_str(maxB, argv[5], 10);
 	int N = atoi(argv[6]);
-	int Bmin = atoi(argv[7]);
-	int Bmax = atoi(argv[8]);
+	int64_t B1 = strtoll(argv[7], NULL, 10);
+	int64_t B2 = strtoll(argv[8], NULL, 10);
 	int Nmax = atoi(argv[9]);
 	uint8_t th0 = atoi(argv[10]);
 	uint8_t th1 = atoi(argv[11]);
@@ -307,7 +308,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, Mlen);
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, k0, sieve_p0, sieve_r0, M,
+		slcsieve(d, Ak, Bk, B1, B2, Nmax, k0, sieve_p0, sieve_r0, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / numt;
@@ -343,7 +344,7 @@ int main(int argc, char** argv)
 		// clear M
 		memset(M, 0, Mlen);
 	
-		slcsieve(d, Ak, Bk, Bmin, Bmax, Nmax, k1, sieve_p1, sieve_r1, M,
+		slcsieve(d, Ak, Bk, B1, B2, Nmax, k1, sieve_p1, sieve_r1, M,
 			blen, bb, Q0, RR, numt);
 
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / numt;
@@ -713,8 +714,9 @@ int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
 	return B;
 }
 
-void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int nump, int* sieve_p,
-	 int* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0, int numt)
+void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int64_t B1, int64_t B2, int Nmax, int nump,
+	int64_t* sieve_p, int64_t* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0,
+	int numt)
 {
 	// per-thread buffers to hold 64-bit encoded sieve vectors
 	uint64_t* Bt = new uint64_t[blen * numt]();
@@ -801,18 +803,18 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Nmax, int num
 	int pc = 0;
 	
 	int imin = 0;
-	while (sieve_p[imin] < Bmin) imin++;
+	while (sieve_p[imin] < B1) imin++;
 	int64_t pmin = sieve_p[imin];
 	int imax = imin;
-	while (sieve_p[imax] < Bmax) imax++;
-	int64_t gap = (int64_t)(((double)Bmax - pmin) / 10.0);
+	while (sieve_p[imax] < B2) imax++;
+	int64_t gap = (int64_t)(((double)B2 - pmin) / 10.0);
 	int64_t nextmark = pmin + gap;
 	#pragma omp parallel num_threads(numt)
 	{
 		#pragma omp for schedule(dynamic, 1)
 		for (int i = imin; i < imax; i++) {
 			int64_t p = sieve_p[i];
-			int r = sieve_r[i];
+			int64_t r = sieve_r[i];
 			__int128 r1 = static_cast<__int128>(r);
 
 			int t = omp_get_thread_num();
@@ -1628,8 +1630,8 @@ void loadpolys(string polyfile, mpz_t* &f0poly, mpz_t* &f1poly, int &degf0, int 
 	if (verbose) cout << endl << "Complete.  Degree f0 = " << degf0 << ", degree f1 = " << degf1 << "." << endl;
 }
 
-void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &sieve_r0,
-	int* &sieve_p1, int* &sieve_r1)
+void loadsievebase(string filename, int &k0, int &k1, int64_t* &sieve_p0, int64_t* &sieve_r0,
+	int64_t* &sieve_p1, int64_t* &sieve_r1)
 {
 	string line;
 	// read fbb
@@ -1640,25 +1642,25 @@ void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &siev
 	// read k0
 	getline(fbfile, line);
 	k0 = atoi(line.c_str());
-	vector<int> vp0;
-	vector<int> vr0;
+	vector<int64_t> vp0;
+	vector<int64_t> vr0;
 	for (int i = 0; i < k0; i++) {
 		getline(fbfile, line);
 		stringstream ss(line);
 		string substr;
 		getline(ss, substr, ',');
-		int p0 = atoi(substr.c_str());
+		int64_t p0 = strtoll(substr.c_str(), NULL, 10);
 		int j = 0;
 		while( ss.good() ) {
 			getline( ss, substr, ',' );
-			int r0 = atoi(substr.c_str());
+			int64_t r0 = strtoll(substr.c_str(), NULL, 10);
 			vp0.push_back(p0);
 			vr0.push_back(r0);
 		}
 	}
 	k0 = vp0.size();
-	sieve_p0 = new int[k0];
-	sieve_r0 = new int[k0];
+	sieve_p0 = new int64_t[k0];
+	sieve_r0 = new int64_t[k0];
 	for (int i = 0; i < k0; i++) {
 		sieve_p0[i] = vp0[i];
 		sieve_r0[i] = vr0[i];
@@ -1667,25 +1669,25 @@ void loadsievebase(string filename, int &k0, int &k1, int* &sieve_p0, int* &siev
 	// read k1
 	getline(fbfile, line);
 	k1 = atoi(line.c_str());
-	vector<int> vp1;
-	vector<int> vr1;
+	vector<int64_t> vp1;
+	vector<int64_t> vr1;
 	for (int i = 0; i < k1; i++) {
 		getline(fbfile, line);
 		stringstream ss(line);
 		string substr;
 		getline(ss, substr, ',');
-		int p1 = atoi(substr.c_str());
+		int64_t p1 = strtoll(substr.c_str(), NULL, 10);
 		int j = 0;
 		while( ss.good() ) {
 			getline( ss, substr, ',' );
-			int r1 = atoi(substr.c_str());
+			int64_t r1 = strtoll(substr.c_str(), NULL, 10);
 			vp1.push_back(p1);
 			vr1.push_back(r1);
 		}
 	}
 	k1 = vp1.size();
-	sieve_p1 = new int[k1];
-	sieve_r1 = new int[k1];
+	sieve_p1 = new int64_t[k1];
+	sieve_r1 = new int64_t[k1];
 	for (int i = 0; i < k1; i++) {
 		sieve_p1[i] = vp1[i];
 		sieve_r1[i] = vr1[i];
