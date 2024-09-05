@@ -390,7 +390,7 @@ int main(int argc, char** argv)
 				if (A64 != 0 && B64 != 0) {
 					int64_t g = gcd(A64, B64);
 					A64 /= g; B64 /= g;
-					if (T < 10) cout << A64 << "*x + " << B64 << endl;
+					if (T < 10000) cout << A64 << "*x + " << B64 << endl;
 					T++;
 				}
 			}
@@ -805,8 +805,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int64_t B1, int64_t B2, int Nmax, int
 	int imin = 0;
 	while (sieve_p[imin] < B1) imin++;
 	int64_t pmin = sieve_p[imin];
-	int imax = imin;
-	while (sieve_p[imax] < B2) imax++;
+	int imax = nump - 1;
 	int64_t gap = (int64_t)(((double)B2 - pmin) / 10.0);
 	int64_t nextmark = pmin + gap;
 	#pragma omp parallel num_threads(numt)
