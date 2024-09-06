@@ -28,8 +28,8 @@ using std::stringstream;
 
 int main(int argc, char** argv)
 {
-	if (argc == 1) {
-		cout << "usage: ./makesievebase polyfile.poly sbb sievebasefile" << endl;
+	if (argc != 5) {
+		cout << "usage: ./makesievebase polyfile.poly sbb sievebasefile t" << endl;
 		return 0;
 	}
 
@@ -97,12 +97,7 @@ int main(int argc, char** argv)
 
 	// set up constants
 	std::clock_t start; double timetaken = 0;
-	int K = 0;
-	#pragma omp parallel
-	{
-		int id = omp_get_thread_num();
-		if (id == 0) K = omp_get_num_threads();
-	}
+	int t = atoi(argv[4]);
 	mpz_t r0; mpz_init(r0);
 	int64_t* s0 = new int64_t[degf * nump]();
 	int64_t* sieves0 = new int64_t[degf * nump]();
@@ -117,10 +112,10 @@ int main(int argc, char** argv)
 	int64_t itenpc0 = nump / 10;
 	int64_t itotal = 0;
 	// compute factor base
-	if (verbose) cout << endl << "Constructing factor base with " << K << " threads." << endl << flush;
+	if (verbose) cout << endl << "Constructing factor base with " << t << " threads." << endl << flush;
 	//if (verbose) cout << endl << "[0%]   constructing factor base..." << endl << flush;
 	start = clock();
-	#pragma omp parallel
+	#pragma omp parallel num_threads(t)
 	{
 		mpz_t rt; mpz_init(rt); 
 		int id = omp_get_thread_num();
@@ -129,7 +124,7 @@ int main(int argc, char** argv)
 		int64_t* stemp1 = new int64_t[degg];
 		int64_t* gp = new int64_t[degg+1]();
 
-	#pragma omp for
+	#pragma omp for schedule(dynamic)
 		for (int64_t i = 0; i < nump; i++) {
 			int64_t p = primes[i];
 			for (int j = 0; j <= degf; j++) fp[j] = mpz_mod_ui(rt, fpoly[j], p);
@@ -159,7 +154,7 @@ int main(int argc, char** argv)
 		delete[] stemp0;
 		mpz_clear(rt);
 	}
-	timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / K;
+	timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / t;
 	start = clock();
 	int k0 = 0; int k1 = 0;
 	for (int i = 0; i < nump; i++) {
@@ -182,6 +177,8 @@ int main(int argc, char** argv)
 	if (verbose) cout << "There are " << k1 << " factor base primes on side 1." << endl << flush;
 
 	// write output file
+	cout << "Writing output file..." << endl;
+	start = clock();
 	FILE* out;
 	out = fopen(argv[3], "w+");
 	fprintf(out, "%ld\n", fbb);
@@ -200,6 +197,8 @@ int main(int argc, char** argv)
 		fprintf(out, "\n");
 	}
 	fclose(out);
+	timetaken += ( clock() - start ) / (double) CLOCKS_PER_SEC / t;
+	if (verbose) cout << "Complete.  Time taken: " << timetaken << "s" << endl << flush;
 
 	// free memory	
 	delete[] sievenum_s1modp;
