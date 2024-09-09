@@ -80,6 +80,7 @@ struct keyval {
 
 __int128 MASK64;
 
+void parseArg(char* input, uint8_t* &result);
 void loadpolys(string polyfile, mpz_t* &f0poly, mpz_t* &f1poly, int &degf0, int &degf1,
 	bool verbose);
 void loadsievebase(string filename, int &k0, int &k1, int64_t* &sieve_p0, int64_t* &sieve_r0,
@@ -87,7 +88,7 @@ void loadsievebase(string filename, int &k0, int &k1, int64_t* &sieve_p0, int64_
 inline int max(int u, int v);
 bool bucket_sorter(keyval const& kv1, keyval const& kv2);
 void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int64_t B1, int64_t B2, int Nmax, int nump,
-	int64_t* sieve_p, int64_t* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0,
+	int64_t* sieve_p, int64_t* sieve_r, uint8_t* M, int blen, uint8_t* bb, int64_t Q0, int64_t R0,
 	int numt);
 void mpz_set_uint128(mpz_t z, __int128 a);
 void matmul(int d, ZZ_mat<mpz_t>& C, ZZ_mat<mpz_t>& A, ZZ_mat<mpz_t>& B, mpz_t &t);
@@ -95,13 +96,13 @@ void matdivexact_ui(int d, ZZ_mat<mpz_t>& A, uint64_t Q);
 void matadj(int d, ZZ_mat<mpz_t> &M, ZZ_mat<mpz_t> &C, ZZ_mat<mpz_t> &MC,
 	ZZ_mat<mpz_t> &Madj, mpz_t &t);
 void negmat(int d, ZZ_mat<mpz_t> &A);
-int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb);
-int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb);
+int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, uint8_t* bb);
+int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, uint8_t* bb);
 int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* &m, int blen, int Nmax,
-	int bb, enumvar* &v1, int t1);
+	uint8_t* bb, enumvar* &v1, int t1);
 void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w);
-void printvector(int d, uint64_t v, int hB);
-void printvectors(int d, vector<uint64_t> &M, int n, int hB);
+void printvector(int d, uint64_t v, uint8_t* bb);
+void printvectors(int d, vector<uint64_t> &M, int n, uint8_t* bb);
 inline int64_t modinv(int64_t x, int64_t m);
 inline int64_t gcd(int64_t a, int64_t b);
 inline __int128 gcd128(__int128 a, __int128 b);
@@ -127,7 +128,7 @@ int main(int argc, char** argv)
 
 	if (argc != 19) {
 		cout << endl << "Usage: ./slcsieve inputpoly sievebasefile d Amax Bmax N "
-			"B1 B2 Nmax th0 th1 lpb cofmaxbits bb Q R blen numt" << endl << endl;
+			"B1 B2 Nmax th0 th1 lpb cofmaxbits bbd Q R blen numt" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
 		cout << "    sievebasefile  sieve base produced with makesievebase" << endl;
 		cout << "    d               sieving dimension" << endl;
@@ -141,7 +142,7 @@ int main(int argc, char** argv)
 		cout << "    th1             sum(logp) threshold on side 1" << endl;
 		cout << "    lpb             large prime bound for both sides (can be mpz_t)" << endl;
 		cout << "    cofmaxbits      should be 11" << endl;
-		cout << "    bb              bits in lattice coefficient range [-bb/2,bb/2]^d" << endl;
+		cout << "    bbd             array of bits in lattice coefficient range [-bb/2,bb/2]^d, e.g. 4.4.5.5.5.5.5.5" << endl;
 		cout << "    Q               special-Q to match (can be up to 2^64)" << endl;
 		cout << "    R               root of sieving polynomial mod Q" << endl;
 		cout << "    blen            max number of vectors per buffer per thread" << endl;
@@ -203,7 +204,7 @@ int main(int argc, char** argv)
 	mpz_t lpb; mpz_init(lpb);
 	mpz_init_set_str(lpb, argv[12], 10);
 	int cofmaxbits = atoi(argv[13]);
-	int bb = atoi(argv[14]);
+	uint8_t* bb; parseArg(argv[14], bb);
 	int64_t cofmax = 1 << cofmaxbits;
 	int64_t Q0 = strtoll(argv[15], NULL, 10);
 	int64_t RR = strtoll(argv[16], NULL, 10);
@@ -211,7 +212,8 @@ int main(int argc, char** argv)
 	__int128 R = static_cast<__int128>(RR);
 
 	// main arrays
-	uint64_t Mlen = 1ul << (bb - 1 + (d - 1) * bb);
+	uint64_t Mlen = 1ul;
+	for (int i = 0; i < d; i++) Mlen <<= bb[i];
 	uint8_t* M = new uint8_t[Mlen];
 	cout << fixed << setprecision(1);
 	cout << "# sieve array will use " << Mlen << " bytes (" << (double)(Mlen)/(1l<<30)
@@ -304,9 +306,7 @@ int main(int argc, char** argv)
 		// sieve side 0
 		cout << "# Starting sieve on side 0..." << endl;
 		start = clock();
-
-		// clear M
-		memset(M, 0, Mlen);
+		memset(M, 0, Mlen); // clear M
 	
 		slcsieve(d, Ak, Bk, B1, B2, Nmax, k0, sieve_p0, sieve_r0, M,
 			blen, bb, Q0, RR, numt);
@@ -337,12 +337,11 @@ int main(int argc, char** argv)
 		timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / numt;
 		cout << "# Finished! Time taken: " << timetaken << "s" << endl << flush;
 		cout << "# " << R0 << " candidates on side 0." << endl << flush;
+		
 		// sieve side 1
 		cout << "# Starting sieve on side 1..." << endl;
 		start = clock();
-		
-		// clear M
-		memset(M, 0, Mlen);
+		memset(M, 0, Mlen); // clear M
 	
 		slcsieve(d, Ak, Bk, B1, B2, Nmax, k1, sieve_p1, sieve_r1, M,
 			blen, bb, Q0, RR, numt);
@@ -643,6 +642,7 @@ int main(int argc, char** argv)
 	mpz_poly_clear(i1); mpz_poly_clear(f1); mpz_poly_clear(f0);
 	mpz_clear(maxB); mpz_clear(maxA);
 	delete[] M;
+	delete[] bb;
 	for (int i = 0; i < 8; i++) mpz_clear(pi[i]); delete[] pi;
 	delete[] sieve_p1;
 	delete[] sieve_r1;
@@ -660,16 +660,17 @@ int main(int argc, char** argv)
 	return 0;
 }
 
-int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb)
+int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, uint8_t* bb)
 {
-	int64_t BB = 1<<bb;
-	int64_t hB = 1<<(bb-1);
+	int64_t BB0 = 1 << bb[0];
 	mpz_t t; mpz_init_set_ui(t, 0);
 	// compute v = L*(vector from reli)
 	int* v = new int[d]();
 	int* u = new int[d]();
-	u[0] = relid % hB;
-	for (int i = 1; i < d; i++) u[i] = (relid >> (bb*i - 1)) % BB - hB;
+	u[0] = relid % BB0;
+	int sbb = 0;
+	for (int i = 1; i < d; i++)
+		u[i] = ((relid >> (sbb+=bb[i-1])) % (1 << bb[i])) - (1 << (bb[i] - 1));
 	for (int j = 0; j < d; j++) {
 		for (int i = 0; i < d; i++) {
 			v[j] += L[j*d + i] * u[i];
@@ -687,16 +688,17 @@ int64_t rel2A(int d, mpz_t* Ak, int64_t* L, int64_t relid, int bb)
 	return A;
 }
 
-int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
+int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, uint8_t* bb)
 {
-	int64_t BB = 1<<bb;
-	int64_t hB = 1<<(bb-1);
+	int64_t BB0 = 1 << bb[0];
 	mpz_t t; mpz_init_set_ui(t, 0);
 	// compute v = L*(vector from reli)
 	int* v = new int[d]();
 	int* u = new int[d]();
-	u[0] = relid % hB;
-	for (int i = 1; i < d; i++) u[i] = (relid >> (bb*i - 1)) % BB - hB;
+	u[0] = relid % BB0;
+	int sbb = 0;
+	for (int i = 1; i < d; i++)
+		u[i] = ((relid >> (sbb+=bb[i-1])) % (1 << bb[i])) - (1 << (bb[i] - 1));
 	for (int j = 0; j < d; j++) {
 		for (int i = 0; i < d; i++) {
 			v[j] += L[j*d + i] * u[i];
@@ -715,7 +717,7 @@ int64_t rel2B(int d, mpz_t* Bk, int64_t* L, int64_t relid, int bb)
 }
 
 void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int64_t B1, int64_t B2, int Nmax, int nump,
-	int64_t* sieve_p, int64_t* sieve_r, uint8_t* M, int blen, int bb, int64_t Q0, int64_t R0,
+	int64_t* sieve_p, int64_t* sieve_r, uint8_t* M, int blen, uint8_t* bb, int64_t Q0, int64_t R0,
 	int numt)
 {
 	// per-thread buffers to hold 64-bit encoded sieve vectors
@@ -1018,30 +1020,32 @@ void printZZ_mat(ZZ_mat<mpz_t> &L, int d, int n, int pr, int w)
 	}
 }
 
-void printvector(int d, uint64_t v, int bb)
+void printvector(int d, uint64_t v, uint8_t* bb)
 {
-	int hB = 1<<(bb-1);
-	int FF = (1<<bb)-1;
-	cout << (v % hB) << "," << flush;
-	for (int i = 1; i < d-1; i++) cout << (int)((v>>(bb*i - 1)) & FF)-hB << ",";
-	cout << (int)(v>>(bb*(d-1) - 1))-hB << endl;
+	int BB0 = 1 << bb[0];
+	cout << (v % BB0) << "," << flush;
+	int sbb = 0;
+	for (int i = 1; i < d-1; i++)
+		cout << (int)(v>>(sbb+=bb[i-1])) % (1<<bb[i]) - (1<<(bb[i]-1)) << ",";
+	cout << (int)(v>>(sbb+=bb[d-2])) - (1<<(bb[d-1] - 1)) << endl;
 }
 
-void printvectors(int d, vector<uint64_t> &M, int n, int bb)
+void printvectors(int d, vector<uint64_t> &M, int n, uint8_t* bb)
 {
-	int hB = 1<<(bb-1);
-	int FF = (1<<bb)-1;
+	int BB0 = 1 << bb[0];
 	for (int j = 0; j < n; j++) {
-		cout << (M[j] % hB) << "," << flush;
-		for (int i = 1; i < d-1; i++) cout << (int)((M[j]>>(bb*i - 1)) & FF)-hB << ",";
-		cout << (int)(M[j]>>(bb*(d-1) - 1))-hB << endl;
+		cout << (M[j] % BB0) << "," << flush;
+		int sbb = 0;
+		for (int i = 1; i < d-1; i++)
+			cout << (int)(M[j]>>(sbb+=bb[i-1])) % (1<<bb[i]) - (1<<bb[i]-1) << ",";
+		cout << (int)(M[j]>>(sbb+=bb[d-2])) - (1<<(bb[d-1] - 1)) << endl;
 	}
 }
 
 int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* &m, int blen, int Nmax,
-	int bb, enumvar* &v1, int t1)
+	uint8_t* bb, enumvar* &v1, int t1)
 {
-	int64_t hB = 1<<(bb-1);
+	int64_t BB0 = 1 << (bb[0] + 1);
 	for (int i = 0; i < d*d; i++) v1->uu[i] = 0;
 
 	// Gram-Schmidt orthogonalization
@@ -1110,7 +1114,7 @@ int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* &m, int blen, int N
 						v1->c[j] = 0;
 						for (int i = 0; i <= t - 1; i++) {
 							v1->c[j] += v1->vk[i] * borig[j*d + i] + v1->common_part[j];
-							if (abs(v1->c[j]) >= hB) { keep = false; break; }
+							if (abs(v1->c[j]) >= (1<<(bb[j]-(j?1:0)))) { keep = false; break; }
 							if (v1->c[j] != 0) iszero = false;
 						}
 						if (!keep) break;
@@ -1119,7 +1123,9 @@ int enumeratehd(int d, int n, int64_t* L, uint64_t* Bt, int* &m, int blen, int N
 						for (int j = 0; j < d; j++) v1->c[j] = -v1->c[j];
 					}
 					uint64_t id = v1->c[0];
-					for (int l = 1; l < d; l++) id += (v1->c[l] + hB) << (l * bb - 1);
+					int sbb = 0;
+					for (int l = 1; l < d; l++)
+						id += (v1->c[l] + (1 << (bb[l]-1))) << (sbb += bb[l-1]);
 					// save vector
 					if (keep && !iszero) {
 						Bt[m[t1]] = id;
@@ -1693,5 +1699,30 @@ void loadsievebase(string filename, int &k0, int &k1, int64_t* &sieve_p0, int64_
 	}
 		
 	fbfile.close();
+}
+
+void parseArg(char* input, uint8_t* &result)
+{
+    // Use a vector to store the parsed integers
+    std::vector<uint8_t> nums;
+
+    // Use a stringstream for tokenization
+    std::stringstream ss(input);
+    std::string token;
+
+    // Split the input by '.'
+    while (std::getline(ss, token, '.')) {
+        int num = std::stoi(token);  // Convert token to an integer
+        if (num < 0 || num > 255) {  // Ensure it fits in an 8-bit integer
+            std::cerr << "Error: Number out of 8-bit range (0-255)." << std::endl;
+        }
+        nums.push_back(static_cast<uint8_t>(num));
+    }
+
+    // Allocate memory for the array
+    result = new uint8_t[nums.size()];
+
+    // Copy the contents of the vector into the allocated array
+    std::memcpy(result, nums.data(), nums.size() * sizeof(uint8_t));
 }
 
