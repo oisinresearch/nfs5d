@@ -123,9 +123,9 @@ int main(int argc, char** argv)
 	MASK64 = MASK64 << 64;
 	MASK64 = MASK64 - 1L;
 
-	if (argc != 16) {
+	if (argc != 17) {
 		cout << endl << "Usage: ./slcsievehdxmono_fplll inputpoly sievebasefile d Amax Bmax N "
-			"B1 B2 Nmax th0 lpb cofmaxbits bbd blen numt" << endl << endl;
+			"B1 B2 Nmax th0 lpb cofmaxbits bbd blen numt rand" << endl << endl;
 		cout << "    inputpoly       input polynomial in N/skew/C0..Ck/Y0..Y1 format" << endl;
 		cout << "    sievebasefile  sieve base produced with makesievebase" << endl;
 		cout << "    d               sieving dimension" << endl;
@@ -141,6 +141,7 @@ int main(int argc, char** argv)
 		cout << "    bbd             array of bits in lattice coefficient range [-bb/2,bb/2]^d, e.g. 4.4.5.5.5.5.5.5" << endl;
 		cout << "    blen            max number of vectors per buffer per thread" << endl;
 		cout << "    numt            number of threads to use" << endl;
+		cout << "    rand            seed for random number generator" << endl;
 		cout << endl;
 		return 0;
 	}
@@ -233,7 +234,7 @@ int main(int argc, char** argv)
 	// create random number generator
 	gmp_randstate_t state;
 	gmp_randinit_default(state);
-	gmp_randseed_ui(state, 123ul);
+	gmp_randseed_ui(state, strtoll(argv[16], NULL, 10));
 
 	mpz_t A; mpz_init(A);
 	mpz_t B; mpz_init(B);
@@ -517,7 +518,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int64_t B1, int64_t B2, int Nmax, int
 	while (sieve_p[imin] < B1) imin++;
 	int64_t pmin = sieve_p[imin];
 	int imax = imin;
-	while (sieve_p[imax] < B2) imax++;
+	while (sieve_p[imax] < B2 && imax + 1 < nump) imax++;
 	int64_t gap = (int64_t)(((double)B2 - pmin) / 10.0);
 	int64_t nextmark = pmin + gap;
 	#pragma omp parallel num_threads(numt)
