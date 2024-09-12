@@ -135,7 +135,7 @@ int main(int argc, char** argv)
 		cout << "    B1              lower bound on sieving primes" << endl;
 		cout << "    B2              upper bound on sieving primes" << endl;
 		cout << "    Nmax            maximum value of sieve vector norm" << endl;
-		cout << "    th0             sum(logp) threshold on side 0" << endl;
+		cout << "    th0             sum(log_5(p)) threshold on side 0" << endl;
 		cout << "    lpb             large prime bound for both sides (can be mpz_t)" << endl;
 		cout << "    cofmaxbits      should be 11" << endl;
 		cout << "    bbd             array of bits in lattice coefficient range [-bb/2,bb/2]^d, e.g. 4.4.5.5.5.5.5.5" << endl;
@@ -530,7 +530,7 @@ void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int64_t B1, int64_t B2, int Nmax, int
 
 			int t = omp_get_thread_num();
 			m[t] = 0;
-			uint8_t logp = log2f(p);
+			uint8_t logp = (int)(log(p)/log(5));
 
 			for (int k = 0; k < dd; k++) L1[t][k] = 0;
 			for (int k = 0; k < d; k++) L1[t][k*d+k] = 1;
