@@ -51,21 +51,27 @@ int main(int argc, char** argv)
 	while (getline(file, line) && line.substr(0,1) == "c" ) {
 		line = line.substr(line.find_first_of(" ")+1);
 		mpz_set_str(fpoly[++degf], line.c_str(), 10);
-		if (verbose) cout << line << endl << flush;
+		if (verbose) cout << line << endl;
 	}
 	file.close();
 	if (verbose) cout << endl << "Complete.  Degree f0 = " << degf << "." << endl;
 
-	if (verbose) cout << endl << "Starting sieve of Eratosthenes for small primes..." << endl << flush;
+	int t = atoi(argv[4]);
+	if (verbose) cout << endl << "Starting sieve of Eratosthenes for small primes..." << endl;
 	int64_t fbb = 1<<21;
 	if (argc >=3) fbb = strtoll(argv[2], NULL, 10);
 	int64_t max = fbb; // 10000000;// 65536;
 	char* sieve = new char[max+1]();
 	int64_t* primes = new int64_t[max]; // int64_t[155611]; //new int64_t[809228];	//new int64_t[6542]; 	// 2039 is the 309th prime, largest below 2048
-	for (int64_t i = 2; i <= sqrt(max); i++)
+	int64_t imax = sqrt(max);
+	for (int64_t j = 4; j <= max; j += 2) {
+		sieve[j] = 1;
+	}
+	for (int64_t i = 3; i <= imax; i += 2) {
 		if(!sieve[i])
-			for (int64_t j = i*i; j <= max; j += i)
-				if(!sieve[j]) sieve[j] = 1;
+			for (int64_t j = i*i; j <= max; j += 2*i)
+				sieve[j] = 1;
+	}
 	int64_t nump = 0;
 	for (int64_t i = 2; i <= max-1; i++)
 		if (!sieve[i])
@@ -74,7 +80,6 @@ int main(int argc, char** argv)
 
 	// set up constants
 	std::clock_t start; double timetaken = 0;
-	int t = atoi(argv[4]);
 	mpz_t r0; mpz_init(r0);
 	int64_t* s0 = new int64_t[degf * nump]();
 	int64_t* sieves0 = new int64_t[degf * nump]();
@@ -84,8 +89,8 @@ int main(int argc, char** argv)
 	int64_t itenpc0 = nump / 10;
 	int64_t itotal = 0;
 	// compute factor base
-	if (verbose) cout << endl << "Constructing factor base with " << t << " threads." << endl << flush;
-	//if (verbose) cout << endl << "[0%]   constructing factor base..." << endl << flush;
+	if (verbose) cout << endl << "Constructing factor base with " << t << " threads." << endl;
+	//if (verbose) cout << endl << "[0%]   constructing factor base..." << endl;
 	start = clock();
 	#pragma omp parallel num_threads(t)
 	{
@@ -108,7 +113,8 @@ int main(int argc, char** argv)
 			itotal++;
 			if (itotal % itenpc0 == 0) {
 	#pragma omp critical
-				if (verbose) cout << "[" << 100 * itotal / nump + 1 << "%]\tConstructing factor base..." << endl << flush;
+				if (verbose) cout << "[" << (int)(100 * (double)itotal / nump) <<
+					"%]\tConstructing factor base..." << endl;
 			}				 
 		}
 
@@ -118,8 +124,8 @@ int main(int argc, char** argv)
 	}
 	timetaken = ( clock() - start ) / (double) CLOCKS_PER_SEC / t;
 	start = clock();
-	int k0 = 0;
-	for (int i = 0; i < nump; i++) {
+	int64_t k0 = 0;
+	for (int64_t i = 0; i < nump; i++) {
 		int nums0 = num_s0modp[i];
 		if (nums0 > 0) {
 			sievep0[k0] = primes[i];
@@ -128,8 +134,8 @@ int main(int argc, char** argv)
 		}
 	}
 	timetaken += ( clock() - start ) / (double) CLOCKS_PER_SEC;
-	if (verbose) cout << "Complete.  Time taken: " << timetaken << "s" << endl << flush;
-	if (verbose) cout << "There are " << k0 << " factor base primes on side 0." << endl << flush;
+	if (verbose) cout << "Complete.  Time taken: " << timetaken << "s" << endl;
+	if (verbose) cout << "There are " << k0 << " factor base primes on side 0." << endl;
 
 	// write output file
 	cout << "Writing output file..." << endl;
@@ -146,7 +152,7 @@ int main(int argc, char** argv)
 	}
 	fclose(out);
 	timetaken += ( clock() - start ) / (double) CLOCKS_PER_SEC / t;
-	if (verbose) cout << "Complete.  Time taken: " << timetaken << "s" << endl << flush;
+	if (verbose) cout << "Complete.  Time taken: " << timetaken << "s" << endl;
 
 	// free memory	
 	delete[] sievenum_s0modp;
