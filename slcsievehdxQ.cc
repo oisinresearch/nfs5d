@@ -152,7 +152,7 @@ int main(int argc, char** argv)
 	int max = 1<<21; // 10000000;// 65536;
 	char* sieve = new char[max+1]();
 	int* primes = new int[2097152]; //int[1077871]; // int[155611]; //new int[809228];	//new int[6542]; 	// 2039 is the 309th prime, largest below 2048
-	for (int i = 2; i <= sqrt(max); i++)
+	for (int i = 2; i <= sqrt((double)max); i++)
 		if(!sieve[i])
 			for (int j = i*i; j <= max; j += i)
 				if(!sieve[j]) sieve[j] = 1;

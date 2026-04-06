@@ -1,29 +1,29 @@
 all:
-	g++ -o makesievebase -lgmp -lgmpxx makesievebase.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O3
-	g++ -o makesievebasemono -lgmp -lgmpxx makesievebasemono.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O3
-	g++ -o slcsieve5dx -lgmp -lgmpxx slcsieve5dx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -std=c++11 -fopenmp -O3
-	g++ -o slcsievehdx -lgmp -lgmpxx slcsievehdx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
-	g++ -o slcsievehdx_fplll -lgmp -lgmpxx -lfplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O3
-	g++ -o slcsievehdxmono -lgmp -lgmpxx -lfplll slcsievehdxmono.cc L2lu64.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O3
-	g++ -o slcsievehdxQ -lgmp -lgmpxx slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
-	g++ -o slcsievehdxQ_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
-	g++ -o slcsievehdxQ2_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ2_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
-	g++ -o showlattice -lgmp -lgmpxx -lfplll showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3
+	g++ -o makesievebase makesievebase.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
+	g++ -o makesievebasemono makesievebasemono.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
+	g++ -o slcsieve5dx slcsieve5dx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
+	g++ -o slcsievehdx slcsievehdx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
+	g++ -o slcsievehdx_fplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx -lfplll
+	g++ -o slcsievehdxmono slcsievehdxmono.cc L2lu64.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx -lfplll
+	g++ -o slcsievehdxQ slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
+	g++ -o slcsievehdxQ_fplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx -lfplll
+	g++ -o slcsievehdxQ2_fplll slcsievehdxQ2_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx -lfplll
+	g++ -o showlattice showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx -lfplll
 
 debug:
-	g++ -o makesievebase -lgmp -lgmpxx makesievebase.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O0 -g
-	g++ -o makesievebasemono -lgmp -lgmpxx makesievebasemono.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsieve5dx -lgmp -lgmpxx slcsieve5dx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsievehdx -lgmp -lgmpxx slcsievehdx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsievehdx_fplll -lgmp -lgmpxx -lfplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsievehdxmono -lgmp -lgmpxx -lfplll slcsievehdxmono.cc L2lu64.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsievehdxQ -lgmp -lgmpxx slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsievehdxQ_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
-	g++ -o slcsievehdxQ2_fplll -lgmp -lgmpxx -lfplll slcsievehdxQ2_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
-	g++ -o showlattice -lgmp -lgmpxx -lfplll showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g
+	g++ -o makesievebase makesievebase.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
+	g++ -o makesievebasemono makesievebasemono.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
+	g++ -o slcsieve5dx slcsieve5dx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
+	g++ -o slcsievehdx slcsievehdx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
+	g++ -o slcsievehdx_fplll slcsievehdx_fplll.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx -lfplll
+	g++ -o slcsievehdxmono slcsievehdxmono.cc L2lu64.cc mpz_poly.cc factorsmall.cc intpoly.cc -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx -lfplll
+	g++ -o slcsievehdxQ slcsievehdxQ.cc mpz_poly.cc L2lu64.cc L2lu128.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
+	g++ -o slcsievehdxQ_fplll slcsievehdxQ_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx -lfplll
+	g++ -o slcsievehdxQ2_fplll slcsievehdxQ2_fplll.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx -lfplll
+	g++ -o showlattice showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx -lfplll
 
 test:
-	g++ -o fplll_test fplll_test.cc -lfplll -lgmp -lgmpxx
+	g++ -o fplll_test fplll_test.cc -lgmp -lgmpxx -lfplll
 	g++ -o L2_test L2_test.cc L2lu64.cc -lgmp -lgmpxx
 
 clean:

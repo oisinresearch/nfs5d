@@ -14,6 +14,8 @@
 #include <stack>	// stack
 #include <fplll.h>
 
+using namespace fplll;
+
 using std::cout;
 using std::endl;
 using std::flush;

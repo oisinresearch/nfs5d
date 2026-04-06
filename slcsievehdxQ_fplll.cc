@@ -15,6 +15,8 @@
 #include <fplll.h>
 #include "L2lu64.h"
 
+using namespace fplll;
+
 using std::cout;
 using std::endl;
 using std::flush;
