@@ -32,6 +32,12 @@ typedef __int128 int128_t;
 
 int128_t MASK64;
 
+// Use two 256-bit registers to represent the 8-dimension vector
+struct vec8 {
+    __m256i lo;  // coords 0-3
+    __m256i hi; // coords 4-7
+};
+
 // ==================== DATA STRUCTURES ====================
 struct KeyVal {
     uint64_t id;
@@ -51,18 +57,6 @@ struct SieveSide {
     uint8_t threshold;
 };
 
-struct SieveWorkspace {
-    vector<double> b, uu, bnorm, sigma, rhok, ck;
-    vector<int> rk, vk, wk, common_part;
-    vector<int64_t> c;
-    L2Workspace l2ws;
-
-    SieveWorkspace(int d)
-        : b(d*d), uu(d*d), bnorm(d), sigma((d+1)*d), rhok(d+1),
-          ck(d), rk(d+1), vk(d), wk(d), common_part(d), c(d),
-          l2ws(d, d) {}
-};
-
 struct GrayWorkspace {
     vector<pair<int, int>> steps;
 
@@ -78,12 +72,26 @@ struct GrayWorkspace {
             st.push_back({0, dir});
             return;
         }
-        build_gray(d_idx - 1, 1, st);
+        build_gray(d_idx - 1, dir, st);
         st.push_back({d_idx, dir});
-        build_gray(d_idx - 1, -1, st);
+        build_gray(d_idx - 1, -dir, st);
         st.push_back({d_idx, dir});
-        build_gray(d_idx - 1, 1, st);
+        build_gray(d_idx - 1, dir, st);
     }
+};
+
+struct SieveWorkspace {
+    vector<double> b, uu, bnorm, sigma, rhok, ck;
+    vector<int> rk, vk, wk, common_part;
+    vector<int64_t> c;
+    L2Workspace l2ws;
+    GrayWorkspace gws;
+    uint64_t m_idx;    // Single pointer for linear filling
+
+    SieveWorkspace(int d)
+        : b(d*d), uu(d*d), bnorm(d), sigma((d+1)*d), rhok(d+1),
+          ck(d), rk(d+1), vk(d), wk(d), common_part(d), c(d),
+          l2ws(d, d), gws(d), m_idx(0) {}
 };
 
 // ==================== FORWARD DECLARATIONS ====================
@@ -92,6 +100,8 @@ int64_t rel2B(int d, mpz_ptr* Bi, int64_t reli, int bb);
 void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
               int* sieve_p, int* sieve_r, int* sieve_n, int degf, KeyVal* M, uint64_t* m,
               int mbb, int bb, SieveWorkspace& ws);
+int enumeratehdgray(int d, int64_t* L, KeyVal* M, uint8_t logp,
+                    int bb, SieveWorkspace& ws, int max_keep);
 int enumeratehd(int d, int n, int64_t* L, KeyVal* M, uint64_t* m, uint8_t logp, int64_t p,
                 int R, SieveWorkspace& ws, int mbb, int bb);
 inline int64_t gcd(int64_t a, int64_t b);
@@ -166,154 +176,168 @@ void load_factor_base(const char* filename, SieveSide* sides, uint8_t* th) {
 
 inline bool bucket_sorter(const KeyVal& a, const KeyVal& b) { return a.id < b.id; }
 
-void collect_candidates(int d, mpz_ptr* Ai, mpz_ptr* Bi, int bb, uint8_t threshold,
-                        KeyVal* M, uint64_t* m, int mbb, vector<int64_t>& rel_list)
+void collect_candidates(uint8_t threshold, KeyVal* M, uint64_t m_count, 
+                        int d, mpz_ptr* Ai, mpz_ptr* Bi, int bb, vector<int64_t>& rel_list)
 {
-    uint64_t bucket_size = 1ul << (mbb - 9);
-    for (int i = 0; i < 512; i++) {
-        uint64_t mtop = i * bucket_size;
-        uint64_t mend = m[i];
-        if (mtop == mend) continue;
-        sort(M + mtop, M + mend, bucket_sorter);
-        uint64_t lastid = M[mtop].id;
-        int sumlogp = M[mtop].logp;
-        for (uint64_t ii = mtop + 1; ii < mend; ii++) {
-            if (M[ii].id == lastid) sumlogp += M[ii].logp;
-            else {
-                if (sumlogp > threshold) {
-                    int64_t A64 = rel2A(d, Ai, lastid, bb);
-                    int64_t B64 = rel2B(d, Bi, lastid, bb);
-                    int64_t g_val = gcd(A64, B64);
-                    if (A64 != 0 && B64 != 0 && abs(A64 / g_val) != 1) rel_list.push_back(lastid);
+    if (m_count == 0) return;
+
+    // Now we sort the entire populated buffer at once
+    sort(M, M + m_count, bucket_sorter);
+
+    uint64_t lastid = M[0].id;
+    int sumlogp = M[0].logp;
+
+    for (uint64_t i = 1; i < m_count; i++) {
+        if (M[i].id == lastid) {
+            sumlogp += M[i].logp;
+        } else {
+            if (sumlogp > threshold) {
+                int64_t A64 = rel2A(d, Ai, lastid, bb);
+                int64_t B64 = rel2B(d, Bi, lastid, bb);
+                int64_t g_val = gcd(A64, B64);
+                if (A64 != 0 && B64 != 0 && abs(A64 / g_val) != 1) {
+                    rel_list.push_back(lastid);
                 }
-                lastid = M[ii].id;
-                sumlogp = M[ii].logp;
             }
+            lastid = M[i].id;
+            sumlogp = M[i].logp;
         }
-        if (sumlogp > threshold) rel_list.push_back(lastid);
     }
+    // Check final item
+    if (sumlogp > threshold) rel_list.push_back(lastid);
 }
 
 void slcsieve(int d, mpz_ptr* Ak, mpz_ptr* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
-              int* sieve_p, int* sieve_r, int* sieve_n, int degf, KeyVal* M, uint64_t* m,
+              int* sieve_p, int* sieve_r, int* sieve_n, int degf, KeyVal* M,
               int mbb, int bb, SieveWorkspace& ws)
 {
     vector<int64_t> L(d * d);
     int lastrow = (d - 1) * d;
-    uint64_t mj = 0;
-    uint64_t bucket_inc = 1ul << (mbb - 9);
-    for (int j = 0; j < 512; j++, mj += bucket_inc) m[j] = mj;
+    ws.m_idx = 0;
+
+	int nn = 0;
     int i = 0;
     while (sieve_p[i] < Bmin) i++;
     while (sieve_p[i] < Bmax) {
         int p = sieve_p[i];
         uint8_t logp = (uint8_t)log2(p);
         int ni = sieve_n[i];
-        int R = Rmin + (Rmax - Rmin) * (double)(p - Bmin) / (Bmax - Bmin);
+        
         for (int j = 0; j < ni; j++) {
             int r = sieve_r[i * degf + j];
             fill(L.begin(), L.end(), 0LL);
             for (int k = 0; k < d; k++) L[k * d + k] = 1;
-            for (int k = 0; k < d - 2; k++) L[lastrow + k] = (mpz_fdiv_ui(Ak[k], p) * r + mpz_fdiv_ui(Bk[k], p)) % p;
-            L[lastrow + d - 2] = r; L[lastrow + d - 1] = p;
+            for (int k = 0; k < d - 2; k++) {
+                L[lastrow + k] = (mpz_fdiv_ui(Ak[k], p) * r + mpz_fdiv_ui(Bk[k], p)) % p;
+            }
+            L[lastrow + d - 2] = r; 
+            L[lastrow + d - 1] = p;
+
             int64L2(L.data(), d, d, ws.l2ws);
-            enumeratehd(d, d, L.data(), M, m, logp, p, R, ws, mbb, bb);
+            
+            nn = enumeratehdgray(d, L.data(), M, logp, bb, ws, 50);
         }
         i++;
+        
+        // Safety break to prevent buffer overflow of M
+        if (ws.m_idx > (1ull << mbb) - 1000) break; 
     }
 }
 
-int enumeratehdgray(int d, int64_t* L, KeyVal* M, uint64_t* m, uint8_t logp,
-                    int mbb, int bb, const GrayWorkspace& ws, int max_keep)
+int enumeratehdgray(int d, int64_t* L, KeyVal* M, uint8_t logp,
+                    int bb, SieveWorkspace& ws, int max_keep)
 {
-    __m512i B[8];
+    if (d > 8) return 0;
+
+    vec8 B[8];
     int64_t hB = 1LL << (bb - 1);
+    int64_t limit = hB - 1;
 
-    // AVX-512 registers require 64 bytes (8x int64_t).
-    // We must pad with zeros if d < 8 to prevent memory access violations during load.
+    // 1. Setup Basis Vectors (Column-indexed, Row-major storage)
     for (int i = 0; i < d; i++) {
-        alignas(64) int64_t b_vec[8] = {0};
-        for (int j = 0; j < d; j++) b_vec[j] = L[j * d + i];
-        B[i] = _mm512_load_epi64(b_vec); // Using aligned load since b_vec is aligned
+        alignas(32) int64_t temp[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        for (int j = 0; j < d; j++) {
+            // Your layout: Vector i is {L[i], L[i+d], L[i+2d]...}
+            temp[j] = L[j * d + i];
+        }
+        B[i].lo = _mm256_load_si256((__m256i*)temp);
+        B[i].hi = _mm256_load_si256((__m256i*)(temp + 4));
     }
 
-    // Setup bounding box masks
-    __m512i bounds = _mm512_set1_epi64(hB);
-    __mmask8 d_mask = (1 << d) - 1; // Only check the active dimensions
-
-    // Initialize at the corner of the ternary cube: [-1, -1, ..., -1]
-    __m512i v = _mm512_setzero_si512();
+    // 2. Initialize v = -sum(B_i)
+    // Ensure this matches the start of your ws.gws.steps sequence!
+    vec8 v = { _mm256_setzero_si256(), _mm256_setzero_si256() };
     for (int i = 0; i < d; i++) {
-        v = _mm512_sub_epi64(v, B[i]);
+        v.lo = _mm256_sub_epi64(v.lo, B[i].lo);
+        v.hi = _mm256_sub_epi64(v.hi, B[i].hi);
     }
 
-    vector<Hit> local_hits;
-    // Pre-allocate exactly enough space for the maximum possible ternary vectors
-    int max_ternary_vectors = (std::pow(3, d) - 1) / 2;
-    local_hits.reserve(max_ternary_vectors);
+    __m256i v_limit = _mm256_set1_epi64x(limit);
+    __m256i v_nlimit = _mm256_set1_epi64x(-limit);
+    uint64_t start_idx = ws.m_idx;
 
-    // Lambda to evaluate the current vector in register 'v'
-    auto evaluate_v = [&](__m512i current_v) {
-        __m512i abs_v = _mm512_abs_epi64(current_v);
-        __mmask8 out_of_bounds = _mm512_cmpge_epi64_mask(abs_v, bounds);
+    auto evaluate_v = [&]() {
+        __m256i gt_l = _mm256_cmpgt_epi64(v.lo, v_limit);
+        __m256i lt_l = _mm256_cmpgt_epi64(v_nlimit, v.lo);
+        __m256i gt_h = _mm256_cmpgt_epi64(v.hi, v_limit);
+        __m256i lt_h = _mm256_cmpgt_epi64(v_nlimit, v.hi);
 
-        // If no active dimensions exceed the bounds
-        if ((out_of_bounds & d_mask) == 0) {
-            alignas(64) int64_t coords[8];
-            _mm512_store_epi64(coords, current_v);
+        __m256i out_any = _mm256_or_si256(_mm256_or_si256(gt_l, lt_l),
+                                          _mm256_or_si256(gt_h, lt_h));
 
-            bool is_zero = true;
-            for (int j = 0; j < d; j++) {
-                if (coords[j] != 0) { is_zero = false; break; }
-            }
-            if (is_zero) return;
+        if (_mm256_testz_si256(out_any, out_any)) {
+            alignas(32) int64_t res[8];
+            _mm256_store_si256((__m256i*)res, v.lo);
+            _mm256_store_si256((__m256i*)(res + 4), v.hi);
 
-            // Enforce positive first non-zero coordinate to prevent duplicate inverse vectors
-            int first_nonzero = 0;
-            while (first_nonzero < d && coords[first_nonzero] == 0) first_nonzero++;
-            if (coords[first_nonzero] < 0) {
-                for (int j = 0; j < d; j++) coords[j] = -coords[j];
+            int first_nonzero_idx = -1;
+            for (int i = 0; i < d; i++) {
+                if (res[i] != 0) {
+                    first_nonzero_idx = i;
+                    break;
+                }
             }
 
-            uint64_t norm = 0;
-            for (int j = 0; j < d; j++) norm += coords[j] * coords[j];
+            if (first_nonzero_idx != -1) {
+                if (res[first_nonzero_idx] < 0) {
+                    for (int k = 0; k < d; k++) res[k] = -res[k];
+                }
 
-            Hit h;
-            h.norm = norm;
-            for(int j = 0; j < d; j++) h.coords[j] = coords[j];
-            local_hits.push_back(h);
+                uint64_t key = 0;
+                for (int i = 0; i < d; i++) {
+                    key ^= (uint64_t)(res[i] + hB) << (i * bb);
+                }
+                M[ws.m_idx++] = {key, logp};
+            }
         }
     };
 
-    // Evaluate initial corner, then traverse the Gray code path
-    evaluate_v(v);
-    for (const auto& step : ws.steps) {
+    // 3. Walk
+    evaluate_v();
+    for (const auto& step : ws.gws.steps) {
+        // Assume step.first is index, step.second is +1 or -1
         if (step.second == 1) {
-            v = _mm512_add_epi64(v, B[step.first]);
+            v.lo = _mm256_add_epi64(v.lo, B[step.first].lo);
+            v.hi = _mm256_add_epi64(v.hi, B[step.first].hi);
         } else {
-            v = _mm512_sub_epi64(v, B[step.first]);
+            v.lo = _mm256_sub_epi64(v.lo, B[step.first].lo);
+            v.hi = _mm256_sub_epi64(v.hi, B[step.first].hi);
         }
-        evaluate_v(v);
+        evaluate_v();
     }
 
-    // Sort by shortest Euclidean norm
-    sort(local_hits.begin(), local_hits.end(), [](const Hit& a, const Hit& b) {
-        return a.norm < b.norm;
-    });
-
-    // Write out the top hits, up to max_keep
-    int limit = min((int)local_hits.size(), max_keep);
-    for (int i = 0; i < limit; i++) {
-        uint64_t id = 0;
-        for (int l = 0; l < d; l++) {
-            id |= (uint64_t)(local_hits[i].coords[l] + hB) << (l * (uint64_t)bb);
+	uint64_t nn = ws.m_idx - start_idx;
+	if (nn > (uint64_t)max_keep) {
+        for (uint64_t i = 0; i < (uint64_t)max_keep; i++) {
+            // Replace with a faster PRNG if available in your ws
+            uint64_t j = i + (rand() % (nn - i));
+            std::swap(M[start_idx + i], M[start_idx + j]);
         }
-        uint64_t mi = id % 509; // Reverted to original user logic
-        M[m[mi]] = {id, logp};
-        m[mi]++;
+        ws.m_idx = start_idx + max_keep;
+        nn = max_keep;
     }
 
-    return limit;
+    return nn;
 }
 
 int enumeratehd(int d, int n, int64_t* L, KeyVal* M, uint64_t* m, uint8_t logp, int64_t p,
@@ -781,13 +805,13 @@ int main(int argc, char** argv)
     // 5. Preparation for Cofactorization
     gmp_randstate_t state; gmp_randinit_default(state); gmp_randseed_ui(state, 123ul);
     vector<mpz_class> Ai(d - 2), Bi(d - 2);
-	vector<mpz_ptr> Ai_ptr(d - 2);
-	vector<mpz_ptr> Bi_ptr(d - 2);
+    vector<mpz_ptr> Ai_ptr(d - 2);
+    vector<mpz_ptr> Bi_ptr(d - 2);
 
-	for (int i = 0; i < d - 2; i++) { 
-		Ai_ptr[i] = Ai[i].get_mpz_t(); 
-		Bi_ptr[i] = Bi[i].get_mpz_t(); 
-	}
+    for (int i = 0; i < d - 2; i++) { 
+        Ai_ptr[i] = Ai[i].get_mpz_t(); 
+        Bi_ptr[i] = Bi[i].get_mpz_t(); 
+    }
 
     mpz_poly i1; mpz_poly_init(i1, 3);
     mpz_t N0, N1, S, factor, p1, p2, t, g1, A, B, pi[8];
@@ -795,6 +819,7 @@ int main(int argc, char** argv)
     mpz_init(t); mpz_init(g1); mpz_init(A); mpz_init(B);
     for (int i = 0; i < 8; i++) mpz_init(pi[i]);
     GetlcmScalar(cofmax, S, small_primes.data(), small_primes.size());
+
 
     // 6. Main Processing Loop
     for (int nn = 0; nn < N_units; nn++) {
@@ -806,14 +831,14 @@ int main(int argc, char** argv)
         SieveWorkspace ws(d);
         vector<int64_t> rel0, rel1, common;
 
-        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[0].p.data(), sides[0].r.data(), sides[0].n.data(), degf, M.data(), m, mbb, bb, ws);
-        collect_candidates(d, Ai_ptr.data(), Bi_ptr.data(), bb, sides[0].threshold, M.data(), m, mbb, rel0);
+        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[0].p.data(), sides[0].r.data(), sides[0].n.data(), degf, M.data(), mbb, bb, ws);
+        collect_candidates(sides[0].threshold, M.data(), ws.m_idx, d, Ai_ptr.data(), Bi_ptr.data(), bb, rel0);
 
-        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[1].p.data(), sides[1].r.data(), sides[1].n.data(), degg, M.data(), m, mbb, bb, ws);
-        collect_candidates(d, Ai_ptr.data(), Bi_ptr.data(), bb, sides[1].threshold, M.data(), m, mbb, rel1);
+        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[1].p.data(), sides[1].r.data(), sides[1].n.data(), degg, M.data(), mbb, bb, ws);
+        collect_candidates(sides[1].threshold, M.data(), ws.m_idx, d, Ai_ptr.data(), Bi_ptr.data(), bb, rel1);
 
         sort(rel0.begin(), rel0.end());
-		sort(rel1.begin(), rel1.end());
+        sort(rel1.begin(), rel1.end());
         set_intersection(rel0.begin(), rel0.end(), rel1.begin(), rel1.end(), back_inserter(common));
 
         stringstream stream;
