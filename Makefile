@@ -1,4 +1,5 @@
 all:
+	g++ -o slcsievehdavx512 slcsievehdavx512.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx -mavx512f -mavx512vl -mavx512bw
 	g++ -o makesievebase makesievebase.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
 	g++ -o makesievebasemono makesievebasemono.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
 	g++ -o slcsieve5dx slcsieve5dx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -std=c++11 -fopenmp -O3 -lgmp -lgmpxx
@@ -11,6 +12,7 @@ all:
 	g++ -o showlattice showlattice.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O3 -lgmp -lgmpxx -lfplll
 
 debug:
+	g++ -o slcsievehdavx512 slcsievehdavx512.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -lquadmath -fext-numeric-literals -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx -mavx512f -mavx512vl -mavx512bw
 	g++ -o makesievebase makesievebase.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
 	g++ -o makesievebasemono makesievebasemono.cc intpoly.cc mpz_poly.cc factorsmall.cc -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
 	g++ -o slcsieve5dx slcsieve5dx.cc mpz_poly.cc L2lu64.cc factorsmall.cc intpoly.cc -std=c++11 -fopenmp -O0 -g -lgmp -lgmpxx
@@ -27,6 +29,7 @@ test:
 	g++ -o L2_test L2_test.cc L2lu64.cc -lgmp -lgmpxx
 
 clean:
+	rm -f slcsievehdavx512
 	rm -f makesievebase
 	rm -f makesievebasemono
 	rm -f slcsieve5dx

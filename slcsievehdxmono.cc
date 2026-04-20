@@ -117,7 +117,7 @@ bool EECM_int128(__int128 N, mpz_t S, __int128 &factor, int d, int a, int X0, in
 
 int main(int argc, char** argv)
 {
-	bool verbose = false;
+	bool verbose = true;
 	std::clock_t start; double timetaken = 0;
 
 	// set constant

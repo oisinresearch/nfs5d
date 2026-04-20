@@ -27,114 +27,220 @@ void printbasis(int64_t* b, int d, int n, int pr, int w)
 	}
 }
 
-// d = dimension of lattice, n = number of basis vectors
-void int64L2(int64_t* borig, int d, int n)
+void int64L2(int64_t* borig, int d, int n, L2Workspace& ws)
 {
-	int dn = d*n;
-	__int128* b = new __int128[dn];
-	__int128* G = new __int128[dn](); // subtle bug unless G initialized to zero
-	float* rr = new float[dn];
-	float* uu = new float[dn];
+    int dn = d*n;
+    __int128* b  = ws.b.data();
+    __int128* G  = ws.G.data();
+    double* rr = ws.rr.data(); 
+    double* uu = ws.uu.data();
 
-	// copy into b
-	for (int i = 0; i < dn; i++) b[i] = borig[i];
+    std::fill(ws.G.begin(), ws.G.end(), 0);
 
-	// compute Gram matrix exactly
-	for (int j = 0; j < n; j++) {
-		for (int i = 0; i <= j; i++) {
-			for (int l = 0; l < d; l++)
-				G[j*n+i] += b[l*n+j] * b[l*n+i];
-			G[i*n+j] = G[j*n+i];
-		}
-	}
+    // copy into b
+    for (int i = 0; i < dn; i++) b[i] = borig[i];
 
-	rr[0] = G[0];
-	int k = 1;
+    // compute Gram matrix exactly (Initial)
+    for (int j = 0; j < n; j++) {
+        for (int i = 0; i <= j; i++) {
+            for (int l = 0; l < d; l++)
+                G[j*n+i] += b[l*n+j] * b[l*n+i];
+            G[i*n+j] = G[j*n+i];
+        }
+    }
 
-	while (k < n) {
-		// n size-reduce b[k]
+    rr[0] = (double)G[0];
+    int k = 1;
 
-		// compute rr[k][j]'s and uu[k][j]'s from G etc
-		for (int i = 0; i <= k; i++) {
-			rr[i*n+k] = G[i*n+k];
-			for (int j = 0; j < i; j++)
-				rr[i*n+k] -= rr[j*n+k] * uu[j*n+i];
-			uu[i*n+k] = rr[i*n+k] / rr[i*n+i];
-		}
+    while (k < n) {
+        // compute rr[k][j]'s and uu[k][j]'s from G etc
+        for (int i = 0; i <= k; i++) {
+            rr[i*n+k] = (double)G[i*n+k];
+            for (int j = 0; j < i; j++)
+                rr[i*n+k] -= rr[j*n+k] * uu[j*n+i];
+            uu[i*n+k] = rr[i*n+k] / rr[i*n+i];
+        }
 
-		// compute max |uu[k*n+j]| for j < k
-		float max = uu[0*n+k];
-		for (int j = 0; j < k; j++)
-			if (fabsf(uu[j*n+k]) > max)
-				max = fabs(uu[j*n+k]);
-		if (max > nn) {
-			for (int j = k-1; j >= 0; j--) {
-				__int128 X = floorf(uu[j*n+k] + 0.5f);
-				for (int i = 0; i < d; i++)
-					b[i*n+k] -= X * b[i*n+j];
-				// update G
-				for (int m = 0; m < n; m++) {
-					for (int i = 0; i <= m; i++) {
-						G[m*n+i] = 0;
-						for (int l = 0; l < d; l++)
-							G[m*n+i] += b[l*n+i] * b[l*n+m];
-						G[i*n+m] = G[m*n+i];
-					}
-				}
-				// update uu
-				for (int i = 0; i < j; i++)
-					uu[i*n+k] -= X * uu[i*n+j];
-			}
-			continue;
-		}
-		
-		if (dd * rr[(k-1)*n+k-1] < rr[k*n+k] + uu[(k-1)*n+k]*uu[(k-1)*n+k] * rr[(k-1)*n+k-1]) {
-			k++;
-		}
-		else {
-			for (int i = 0; i < d; i++) {
-				__int128 t = b[i*n+k-1];
-				b[i*n+k-1] = b[i*n+k];
-				b[i*n+k] = t;
-			}
-			// update G
-			for (int j = 0; j < n; j++) {
-				for (int i = 0; i <= j; i++) {
-					G[j*n+i] = 0;
-					for (int l = 0; l < d; l++)
-						G[j*n+i] += b[l*n+i] * b[l*n+j];
-					G[i*n+j] = G[j*n+i];
-				}
-			}
-			// update rr[(k-1)*n+i] & uu[(k-1)*n+i]
-			for (int i = 0; i <= k-1; i++) {
-				rr[i*n+k-1] = G[i*n+k-1];
-				for (int j = 0; j < i; j++)
-					rr[i*n+k-1] -= rr[j*n+k-1] * uu[j*n+i];
-				uu[i*n+k-1] = rr[i*n+k-1] / rr[i*n+i];
-			}
-			// update rr[k*n+i] & uu[k*n+i]
-			for (int i = 0; i <= k; i++) {
-				rr[i*n+k] = G[i*n+k];
-				for (int j = 0; j < i; j++)
-					rr[i*n+k] -= rr[j*n+k] * uu[j*n+i];
-				uu[i*n+k] = rr[i*n+k] / rr[i*n+i];
-			}
-			
-			k--;
-			if (k < 1) k = 1;
-		}
-		// finished
-	}
+        // compute max |uu[k*n+j]| for j < k
+        float max_val = (float)uu[0*n+k];
+        for (int j = 0; j < k; j++)
+            if (fabsf((float)uu[j*n+k]) > max_val)
+                max_val = fabsf((float)uu[j*n+k]);
 
-	// write output
-	for (int i = 0; i < dn; i++) borig[i] = b[i];
+        if (max_val > nn) {
+            for (int j = k-1; j >= 0; j--) {
+                __int128 X = (__int128)floorf((float)uu[j*n+k] + 0.5f);
+                
+                // SPEEDUP 1: Only do work if we are actually reducing
+                if (X != 0) {
+                    for (int i = 0; i < d; i++)
+                        b[i*n+k] -= X * b[i*n+j];
+                    
+                    // SPEEDUP 2: Only vector k changed. Recompute ONLY row/col k exactly.
+                    for (int i = 0; i < n; i++) {
+                        __int128 dot = 0;
+                        for (int l = 0; l < d; l++)
+                            dot += b[l*n+i] * b[l*n+k];
+                        G[k*n+i] = G[i*n+k] = dot;
+                    }
+                    
+                    // update uu
+                    for (int i = 0; i < j; i++)
+                        uu[i*n+k] -= (double)X * uu[i*n+j];
+                }
+            }
+            continue;
+        }
 
-	// deallocate
-	delete[] uu;
-	delete[] rr;
-	delete[] G;
-	delete[] b;
+        if (dd * rr[(k-1)*n+k-1] < rr[k*n+k] + uu[(k-1)*n+k]*uu[(k-1)*n+k] * rr[(k-1)*n+k-1]) {
+            k++;
+        }
+        else {
+            for (int i = 0; i < d; i++) {
+                __int128 t = b[i*n+k-1];
+                b[i*n+k-1] = b[i*n+k];
+                b[i*n+k] = t;
+            }
+            
+            // SPEEDUP 3: Only vectors k-1 and k changed. Recompute ONLY those exactly.
+            for (int m = k-1; m <= k; m++) {
+                for (int i = 0; i < n; i++) {
+                    __int128 dot = 0;
+                    for (int l = 0; l < d; l++)
+                        dot += b[l*n+i] * b[l*n+m];
+                    G[m*n+i] = G[i*n+m] = dot;
+                }
+            }
+            
+            // update rr[(k-1)*n+i] & uu[(k-1)*n+i]
+            for (int i = 0; i <= k-1; i++) {
+                rr[i*n+k-1] = (double)G[i*n+k-1];
+                for (int j = 0; j < i; j++)
+                    rr[i*n+k-1] -= rr[j*n+k-1] * uu[j*n+i];
+                uu[i*n+k-1] = rr[i*n+k-1] / rr[i*n+i];
+            }
+            // update rr[k*n+i] & uu[k*n+i]
+            for (int i = 0; i <= k; i++) {
+                rr[i*n+k] = (double)G[i*n+k];
+                for (int j = 0; j < i; j++)
+                    rr[i*n+k] -= rr[j*n+k] * uu[j*n+i];
+                uu[i*n+k] = rr[i*n+k] / rr[i*n+i];
+            }
+
+            k--;
+            if (k < 1) k = 1;
+        }
+    }
+
+    // write output
+    for (int i = 0; i < dn; i++) borig[i] = (int64_t)b[i];
+}
+
+// d = dimension of lattice, n = number of basis vectors
+void int64L2old(int64_t* borig, int d, int n, L2Workspace& ws)
+{
+    int dn = d*n;
+    // No 'new' calls; use the vectors in ws
+    __int128* b  = ws.b.data();
+    __int128* G  = ws.G.data();
+    double* rr = ws.rr.data(); // Note: Changed to double for the workspace type
+    double* uu = ws.uu.data();
+
+    // Subtle bug fix from your original: ensure G is zeroed before use
+    std::fill(ws.G.begin(), ws.G.end(), 0);
+
+    // copy into b
+    for (int i = 0; i < dn; i++) b[i] = borig[i];
+
+    // compute Gram matrix exactly
+    for (int j = 0; j < n; j++) {
+        for (int i = 0; i <= j; i++) {
+            for (int l = 0; l < d; l++)
+                G[j*n+i] += b[l*n+j] * b[l*n+i];
+            G[i*n+j] = G[j*n+i];
+        }
+    }
+
+    rr[0] = (double)G[0];
+    int k = 1;
+
+    while (k < n) {
+        // compute rr[k][j]'s and uu[k][j]'s from G etc
+        for (int i = 0; i <= k; i++) {
+            rr[i*n+k] = (double)G[i*n+k];
+            for (int j = 0; j < i; j++)
+                rr[i*n+k] -= rr[j*n+k] * uu[j*n+i];
+            uu[i*n+k] = rr[i*n+k] / rr[i*n+i];
+        }
+
+        // compute max |uu[k*n+j]| for j < k
+        float max_val = (float)uu[0*n+k];
+        for (int j = 0; j < k; j++)
+            if (fabsf((float)uu[j*n+k]) > max_val)
+                max_val = fabsf((float)uu[j*n+k]);
+
+        if (max_val > nn) {
+            for (int j = k-1; j >= 0; j--) {
+                __int128 X = (__int128)floorf((float)uu[j*n+k] + 0.5f);
+                for (int i = 0; i < d; i++)
+                    b[i*n+k] -= X * b[i*n+j];
+                
+                // update G
+                for (int m = 0; m < n; m++) {
+                    for (int i = 0; i <= m; i++) {
+                        G[m*n+i] = 0;
+                        for (int l = 0; l < d; l++)
+                            G[m*n+i] += b[l*n+i] * b[l*n+m];
+                        G[i*n+m] = G[m*n+i];
+                    }
+                }
+                // update uu
+                for (int i = 0; i < j; i++)
+                    uu[i*n+k] -= (double)X * uu[i*n+j];
+            }
+            continue;
+        }
+
+        if (dd * rr[(k-1)*n+k-1] < rr[k*n+k] + uu[(k-1)*n+k]*uu[(k-1)*n+k] * rr[(k-1)*n+k-1]) {
+            k++;
+        }
+        else {
+            for (int i = 0; i < d; i++) {
+                __int128 t = b[i*n+k-1];
+                b[i*n+k-1] = b[i*n+k];
+                b[i*n+k] = t;
+            }
+            // update G
+            for (int j = 0; j < n; j++) {
+                for (int i = 0; i <= j; i++) {
+                    G[j*n+i] = 0;
+                    for (int l = 0; l < d; l++)
+                        G[j*n+i] += b[l*n+i] * b[l*n+j];
+                    G[i*n+j] = G[j*n+i];
+                }
+            }
+            // update rr[(k-1)*n+i] & uu[(k-1)*n+i]
+            for (int i = 0; i <= k-1; i++) {
+                rr[i*n+k-1] = (double)G[i*n+k-1];
+                for (int j = 0; j < i; j++)
+                    rr[i*n+k-1] -= rr[j*n+k-1] * uu[j*n+i];
+                uu[i*n+k-1] = rr[i*n+k-1] / rr[i*n+i];
+            }
+            // update rr[k*n+i] & uu[k*n+i]
+            for (int i = 0; i <= k; i++) {
+                rr[i*n+k] = (double)G[i*n+k];
+                for (int j = 0; j < i; j++)
+                    rr[i*n+k] -= rr[j*n+k] * uu[j*n+i];
+                uu[i*n+k] = rr[i*n+k] / rr[i*n+i];
+            }
+
+            k--;
+            if (k < 1) k = 1;
+        }
+    }
+
+    // write output
+    for (int i = 0; i < dn; i++) borig[i] = (int64_t)b[i];
 }
 
 void copysquareint64array(int64_t* src, int64_t* dest, int d)
