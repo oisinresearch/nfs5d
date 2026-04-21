@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <iomanip>
-#include <cstdint>	// int64_t
+#include <cstdint>    // int64_t
 
 using std::cout;
 using std::endl;
@@ -19,12 +19,12 @@ float dd = (delta+1.0f) / 2.0f;
 
 void printbasis(int64_t* b, int d, int n, int pr, int w)
 {
-	for (int j = 0; j < d; j++) {
-		for (int i = 0; i < n; i++) {
-			cout << fixed << setprecision(pr) << setw(w) << b[j*n+i] << (i<n-1?",":"") << "\t";
-		}
-		cout << ";\\" << endl << flush;
-	}
+    for (int j = 0; j < d; j++) {
+        for (int i = 0; i < n; i++) {
+            cout << fixed << setprecision(pr) << setw(w) << b[j*n+i] << (i<n-1?",":"") << "\t";
+        }
+        cout << ";\\" << endl << flush;
+    }
 }
 
 void int64L2(int64_t* borig, int d, int n, L2Workspace& ws)
@@ -256,15 +256,15 @@ void luinv(int64_t* b, int64_t* M, int d)
     // U*M = Y
     // M = b^-1
 
-	int d2 = d*d;
+    int d2 = d*d;
     int* P = new int[d2]();
     int64_t* L = new int64_t[d2];
     int64_t* U = new int64_t[d2];
     int64_t* Y = new int64_t[d2];
-	for (int i = 0; i < d; i++) { 
-		P[i] = i;
-		L[i*d+i] = 1;
-	}
+    for (int i = 0; i < d; i++) { 
+        P[i] = i;
+        L[i*d+i] = 1;
+    }
     copysquareint64array(b, U, d);
 
     for (int i = 0; i < d-1; i++) {
@@ -280,8 +280,8 @@ void luinv(int64_t* b, int64_t* M, int d)
             U[i*d+j] = t;
         }
         int s = P[i];
-		P[i] = P[jmax];
-		P[jmax] = s;
+        P[i] = P[jmax];
+        P[jmax] = s;
 
         // swap row i and jmax of L up to diagonal
         for (int j = 0; j < i; j++) {
@@ -314,7 +314,7 @@ void luinv(int64_t* b, int64_t* M, int d)
         for (int j = d-1; j >= 0; j--) {
             M[j*d+i] = Y[j*d+i]/U[j*d+j];
             for (int k = d-1; k > j; k--) {
-            	M[j*d+i] -= M[k*d+i]*U[j*d+k]/U[j*d+j];
+                M[j*d+i] -= M[k*d+i]*U[j*d+k]/U[j*d+j];
             }
         }
     }
@@ -323,60 +323,5 @@ void luinv(int64_t* b, int64_t* M, int d)
     delete[] U;
     delete[] L;
     delete[] P;
-}
-
-int64_t fadlev4d(int64_t* A, int64_t *M)
-{
-	int64_t c = 1;
-	int64_t Mnew[16];
-
-	for (int i = 0; i < 16; i++) M[i] = 0;
-	M[0] = 1; M[5] = 1; M[10] = 1; M[15] = 1;
-	c = -(A[0] + A[5] + A[10] + A[15]);
-
-	for (int k = 2; k <= 4; k++) {
-		// compute Mnew = A*M
-		Mnew[0] = A[0]*M[0] + A[1]*M[4] + A[2]*M[8] + A[3]*M[12];
-		Mnew[1] = A[0]*M[1] + A[1]*M[5] + A[2]*M[9] + A[3]*M[13];
-		Mnew[2] = A[0]*M[2] + A[1]*M[6] + A[2]*M[10] + A[3]*M[14];
-		Mnew[3] = A[0]*M[3] + A[1]*M[7] + A[2]*M[11] + A[3]*M[15];
-		Mnew[4] = A[4]*M[0] + A[5]*M[4] + A[6]*M[8] + A[7]*M[12];
-		Mnew[5] = A[4]*M[1] + A[5]*M[5] + A[6]*M[9] + A[7]*M[13];
-		Mnew[6] = A[4]*M[2] + A[5]*M[6] + A[6]*M[10] + A[7]*M[14];
-		Mnew[7] = A[4]*M[3] + A[5]*M[7] + A[6]*M[11] + A[7]*M[15];
-		Mnew[8] = A[8]*M[0] + A[9]*M[4] + A[10]*M[8] + A[11]*M[12];
-		Mnew[9] = A[8]*M[1] + A[9]*M[5] + A[10]*M[9] + A[11]*M[13];
-		Mnew[10] = A[8]*M[2] + A[9]*M[6] + A[10]*M[10] + A[11]*M[14];
-		Mnew[11] = A[8]*M[3] + A[9]*M[7] + A[10]*M[11] + A[11]*M[15];
-		Mnew[12] = A[12]*M[0] + A[13]*M[4] + A[14]*M[8] + A[15]*M[12];
-		Mnew[13] = A[12]*M[1] + A[13]*M[5] + A[14]*M[9] + A[15]*M[13];
-		Mnew[14] = A[12]*M[2] + A[13]*M[6] + A[14]*M[10] + A[15]*M[14];
-		Mnew[15] = A[12]*M[3] + A[13]*M[7] + A[14]*M[11] + A[15]*M[15];
-
-		for (int i = 0; i < 16; i++) M[i] = Mnew[i];
-		M[0] += c; M[5] += c; M[10] += c; M[15] += c;
-
-		// compute A*M
-		Mnew[0] = A[0]*M[0] + A[1]*M[4] + A[2]*M[8] + A[3]*M[12];
-		Mnew[1] = A[0]*M[1] + A[1]*M[5] + A[2]*M[9] + A[3]*M[13];
-		Mnew[2] = A[0]*M[2] + A[1]*M[6] + A[2]*M[10] + A[3]*M[14];
-		Mnew[3] = A[0]*M[3] + A[1]*M[7] + A[2]*M[11] + A[3]*M[15];
-		Mnew[4] = A[4]*M[0] + A[5]*M[4] + A[6]*M[8] + A[7]*M[12];
-		Mnew[5] = A[4]*M[1] + A[5]*M[5] + A[6]*M[9] + A[7]*M[13];
-		Mnew[6] = A[4]*M[2] + A[5]*M[6] + A[6]*M[10] + A[7]*M[14];
-		Mnew[7] = A[4]*M[3] + A[5]*M[7] + A[6]*M[11] + A[7]*M[15];
-		Mnew[8] = A[8]*M[0] + A[9]*M[4] + A[10]*M[8] + A[11]*M[12];
-		Mnew[9] = A[8]*M[1] + A[9]*M[5] + A[10]*M[9] + A[11]*M[13];
-		Mnew[10] = A[8]*M[2] + A[9]*M[6] + A[10]*M[10] + A[11]*M[14];
-		Mnew[11] = A[8]*M[3] + A[9]*M[7] + A[10]*M[11] + A[11]*M[15];
-		Mnew[12] = A[12]*M[0] + A[13]*M[4] + A[14]*M[8] + A[15]*M[12];
-		Mnew[13] = A[12]*M[1] + A[13]*M[5] + A[14]*M[9] + A[15]*M[13];
-		Mnew[14] = A[12]*M[2] + A[13]*M[6] + A[14]*M[10] + A[15]*M[14];
-		Mnew[15] = A[12]*M[3] + A[13]*M[7] + A[14]*M[11] + A[15]*M[15];
-
-		c = -(Mnew[0] + Mnew[5] + Mnew[10] + Mnew[15]) / k;
-	}
-
-	return c;
 }
 

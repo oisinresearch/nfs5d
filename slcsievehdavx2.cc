@@ -54,6 +54,7 @@ struct SieveSide {
     vector<int> p;
     vector<int> r;
     vector<int> n;
+    vector<int> r_offset;
     uint8_t threshold;
 };
 
@@ -97,9 +98,8 @@ struct SieveWorkspace {
 // ==================== FORWARD DECLARATIONS ====================
 int64_t rel2A(int d, mpz_ptr* Ai, int64_t reli, int bb);
 int64_t rel2B(int d, mpz_ptr* Bi, int64_t reli, int bb);
-void slcsieve(int d, mpz_t* Ak, mpz_t* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
-              int* sieve_p, int* sieve_r, int* sieve_n, int degf, KeyVal* M, uint64_t* m,
-              int mbb, int bb, SieveWorkspace& ws);
+void slcsieve(int d, mpz_ptr* Ak, mpz_ptr* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
+              const SieveSide& side, int degf, KeyVal* M, int mbb, int bb, SieveWorkspace& ws);
 int enumeratehdgray(int d, int64_t* L, KeyVal* M, uint8_t logp,
                     int bb, SieveWorkspace& ws, int max_keep);
 int enumeratehd(int d, int n, int64_t* L, KeyVal* M, uint64_t* m, uint8_t logp, int64_t p,
@@ -155,6 +155,7 @@ void load_factor_base(const char* filename, SieveSide* sides, uint8_t* th) {
         getline(fbfile, line);
         sides[s].k = stoi(line);
         sides[s].threshold = th[s];
+        int offset = 0;
         for (int i = 0; i < sides[s].k; i++) {
             getline(fbfile, line);
             stringstream ss(line);
@@ -168,6 +169,8 @@ void load_factor_base(const char* filename, SieveSide* sides, uint8_t* th) {
                 count++;
             }
             sides[s].n.push_back(count);
+            sides[s].r_offset.push_back(offset);
+            offset += count;
         }
     }
 }
@@ -208,23 +211,23 @@ void collect_candidates(uint8_t threshold, KeyVal* M, uint64_t m_count,
 }
 
 void slcsieve(int d, mpz_ptr* Ak, mpz_ptr* Bk, int Bmin, int Bmax, int Rmin, int Rmax,
-              int* sieve_p, int* sieve_r, int* sieve_n, int degf, KeyVal* M,
-              int mbb, int bb, SieveWorkspace& ws)
+              const SieveSide& side, int degf, KeyVal* M, int mbb, int bb, SieveWorkspace& ws)
 {
     vector<int64_t> L(d * d);
     int lastrow = (d - 1) * d;
     ws.m_idx = 0;
+    int kmax = side.k;
 
-	int nn = 0;
+    int nn = 0;
     int i = 0;
-    while (sieve_p[i] < Bmin) i++;
-    while (sieve_p[i] < Bmax) {
-        int p = sieve_p[i];
+    while (i < kmax && side.p[i] < Bmin) i++;
+    while (i < kmax && side.p[i] < Bmax) {
+        int p = side.p[i];
         uint8_t logp = (uint8_t)log2(p);
-        int ni = sieve_n[i];
+        int ni = side.n[i];
         
         for (int j = 0; j < ni; j++) {
-            int r = sieve_r[i * degf + j];
+            int r = side.r[side.r_offset[i] + j];
             fill(L.begin(), L.end(), 0LL);
             for (int k = 0; k < d; k++) L[k * d + k] = 1;
             for (int k = 0; k < d - 2; k++) {
@@ -326,11 +329,11 @@ int enumeratehdgray(int d, int64_t* L, KeyVal* M, uint8_t logp,
         evaluate_v();
     }
 
-	uint64_t nn = ws.m_idx - start_idx;
-	if (nn > (uint64_t)max_keep) {
+    uint64_t nn = ws.m_idx - start_idx;
+    if (nn > (uint64_t)max_keep) {
         for (uint64_t i = 0; i < (uint64_t)max_keep; i++) {
             // Replace with a faster PRNG if available in your ws
-            uint64_t j = i + (rand() % (nn - i));
+            uint64_t j = i + ((start_idx + i) * 2654435761ULL) % (nn - i);
             std::swap(M[start_idx + i], M[start_idx + j]);
         }
         ws.m_idx = start_idx + max_keep;
@@ -826,21 +829,60 @@ int main(int argc, char** argv)
         for (int i = 0; i < d - 2; i++) {
             mpz_urandomm(Ai_ptr[i], state, maxA.get_mpz_t());
             mpz_urandomm(Bi_ptr[i], state, maxB.get_mpz_t());
+            char str1[64], str2[64];
+            mpz_get_str(str1, 10, Ai_ptr[i]);
+            mpz_get_str(str2, 10, Bi_ptr[i]);
+            cout << "# " << str1 << "*x + " << str2 << endl;
         }
 
         SieveWorkspace ws(d);
         vector<int64_t> rel0, rel1, common;
 
-        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[0].p.data(), sides[0].r.data(), sides[0].n.data(), degf, M.data(), mbb, bb, ws);
+        // Side 0 sieve
+        cout << "# Starting sieve on side 0..." << endl;
+        std::clock_t start = clock();
+        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[0], degf, M.data(), mbb, bb, ws);
+        double timetaken = (clock() - start) / (double)CLOCKS_PER_SEC;
+        cout << "# Finished! Time taken: " << timetaken << "s" << endl;
+        cout << "# Size of lattice point list is " << ws.m_idx << "." << endl;
+
+        cout << "# Sorting bucket sieve data..." << endl;
+        start = clock();
         collect_candidates(sides[0].threshold, M.data(), ws.m_idx, d, Ai_ptr.data(), Bi_ptr.data(), bb, rel0);
+        timetaken = (clock() - start) / (double)CLOCKS_PER_SEC;
+        cout << "# Finished! Time taken: " << timetaken << "s" << endl;
+        cout << "# " << rel0.size() << " candidates on side 0." << endl;
 
-        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[1].p.data(), sides[1].r.data(), sides[1].n.data(), degg, M.data(), mbb, bb, ws);
+        // Side 1 sieve
+        cout << "# Starting sieve on side 1..." << endl;
+        start = clock();
+        slcsieve(d, Ai_ptr.data(), Bi_ptr.data(), Bmin, Bmax, Rmin, Rmax, sides[1], degg, M.data(), mbb, bb, ws);
+        timetaken = (clock() - start) / (double)CLOCKS_PER_SEC;
+        cout << "# Finished! Time taken: " << timetaken << "s" << endl;
+        cout << "# Size of lattice point list is " << ws.m_idx << "." << endl;
+
+        cout << "# Sorting bucket sieve data..." << endl;
+        start = clock();
         collect_candidates(sides[1].threshold, M.data(), ws.m_idx, d, Ai_ptr.data(), Bi_ptr.data(), bb, rel1);
+        timetaken = (clock() - start) / (double)CLOCKS_PER_SEC;
+        cout << "# Finished! Time taken: " << timetaken << "s" << endl;
+        cout << "# " << rel1.size() << " candidates on side 1." << endl;
 
+        // Intersection
+        cout << "# Sorting candidate relation list..." << endl;
+        start = clock();
         sort(rel0.begin(), rel0.end());
         sort(rel1.begin(), rel1.end());
         set_intersection(rel0.begin(), rel0.end(), rel1.begin(), rel1.end(), back_inserter(common));
+        timetaken = (clock() - start) / (double)CLOCKS_PER_SEC;
+        cout << "# Finished! Time taken: " << timetaken << "s" << endl;
+        cout << "# " << common.size() << " potential relations found." << endl;
 
+        // Cofactorization
+        cout << "# Starting cofactorization..." << endl;
+        start = clock();
+        int R = 0;
+        int samples = 0;
         stringstream stream;
         for (int64_t id : common) {
             mpz_set_si(A, rel2A(d, Ai_ptr.data(), id, bb));
@@ -857,9 +899,19 @@ int main(int argc, char** argv)
             if (cofactorize_side(N0, S, lpb, str, 16, QN, Q, algarr, pi, factor, p1, p2, t)) {
                 str += ":";
                 trial_divide_side(N1, sides[1].p, small_primes, str, stream);
-                if (cofactorize_side(N1, S, lpb, str, 16, QN, Q, algarr, pi, factor, p1, p2, t)) cout << str << endl;
+                if (cofactorize_side(N1, S, lpb, str, 16, QN, Q, algarr, pi, factor, p1, p2, t)) {
+                    cout << str << endl;
+                    R++;
+                }
+            }
+            if (samples < 10) {
+                cout << str << endl;
+                samples++;
             }
         }
+        timetaken = (clock() - start) / (double)CLOCKS_PER_SEC;
+        cout << "# Finished! Cofactorization took " << timetaken << "s" << endl;
+        cout << "# " << R << " actual relations found." << endl;
     }
 
     // 7. Cleanup
